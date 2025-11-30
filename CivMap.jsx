@@ -2044,8 +2044,8 @@ const CivilizationMetroMap = () => {
                   strokeOpacity="0.25" 
                   strokeLinecap="round"
                   style={{
-                    strokeDasharray: 5000,
-                    strokeDashoffset: 5000 * (1 - animationProgress),
+                    strokeDasharray: 10000,
+                    strokeDashoffset: 10000 * (1 - animationProgress),
                     transition: 'stroke-dashoffset 0.1s linear',
                     opacity: visibleLines.philosophy ? 1 : 0.3
                   }}
@@ -2059,8 +2059,8 @@ const CivilizationMetroMap = () => {
                   strokeOpacity="0.9" 
                   strokeLinecap="round"
                   style={{
-                    strokeDasharray: 5000,
-                    strokeDashoffset: 5000 * (1 - animationProgress),
+                    strokeDasharray: 10000,
+                    strokeDashoffset: 10000 * (1 - animationProgress),
                     transition: 'stroke-dashoffset 0.1s linear',
                     opacity: visibleLines.philosophy ? 1 : 0.3
                   }}
@@ -2074,8 +2074,8 @@ const CivilizationMetroMap = () => {
                   strokeOpacity="0.8" 
                   strokeLinecap="round"
                   style={{
-                    strokeDasharray: 5000,
-                    strokeDashoffset: 5000 * (1 - animationProgress),
+                    strokeDasharray: 10000,
+                    strokeDashoffset: 10000 * (1 - animationProgress),
                     transition: 'stroke-dashoffset 0.1s linear',
                     opacity: visibleLines.philosophy ? 1 : 0.3
                   }}
@@ -2094,8 +2094,8 @@ const CivilizationMetroMap = () => {
                   strokeWidth="30" 
                   strokeLinecap="round"
                   style={{
-                    strokeDasharray: 5000,
-                    strokeDashoffset: 5000 * (1 - animationProgress),
+                    strokeDasharray: 10000,
+                    strokeDashoffset: 10000 * (1 - animationProgress),
                     transition: 'stroke-dashoffset 0.1s linear',
                     opacity: visibleLines.empire ? 0.5 : 0.15
                   }}
@@ -2108,8 +2108,8 @@ const CivilizationMetroMap = () => {
                   strokeWidth="18" 
                   strokeLinecap="round"
                   style={{
-                    strokeDasharray: 5000,
-                    strokeDashoffset: 5000 * (1 - animationProgress),
+                    strokeDasharray: 10000,
+                    strokeDashoffset: 10000 * (1 - animationProgress),
                     transition: 'stroke-dashoffset 0.1s linear',
                     opacity: visibleLines.empire ? 1 : 0.3
                   }}
@@ -2122,8 +2122,8 @@ const CivilizationMetroMap = () => {
                   strokeWidth="8" 
                   strokeLinecap="round"
                   style={{
-                    strokeDasharray: 5000,
-                    strokeDashoffset: 5000 * (1 - animationProgress),
+                    strokeDasharray: 10000,
+                    strokeDashoffset: 10000 * (1 - animationProgress),
                     transition: 'stroke-dashoffset 0.1s linear',
                     opacity: visibleLines.empire ? 0.9 : 0.25
                   }}
@@ -2143,8 +2143,8 @@ const CivilizationMetroMap = () => {
                   strokeLinecap="round" 
                   opacity="0.5"
                   style={{
-                    strokeDasharray: 5000,
-                    strokeDashoffset: 5000 * (1 - animationProgress),
+                    strokeDasharray: 10000,
+                    strokeDashoffset: 10000 * (1 - animationProgress),
                     transition: 'stroke-dashoffset 0.1s linear'
                   }}
                 />
@@ -2157,8 +2157,8 @@ const CivilizationMetroMap = () => {
                   strokeLinecap="round" 
                   opacity="1"
                   style={{
-                    strokeDasharray: 5000,
-                    strokeDashoffset: 5000 * (1 - animationProgress),
+                    strokeDasharray: 10000,
+                    strokeDashoffset: 10000 * (1 - animationProgress),
                     transition: 'stroke-dashoffset 0.1s linear'
                   }}
                 />
@@ -2171,8 +2171,8 @@ const CivilizationMetroMap = () => {
                   strokeLinecap="round"
                   filter="url(#glow-green)"
                   style={{
-                    strokeDasharray: 5000,
-                    strokeDashoffset: 5000 * (1 - animationProgress),
+                    strokeDasharray: 10000,
+                    strokeDashoffset: 10000 * (1 - animationProgress),
                     transition: 'stroke-dashoffset 0.1s linear'
                   }}
                 />
@@ -2191,8 +2191,8 @@ const CivilizationMetroMap = () => {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   style={{
-                    strokeDasharray: 5000,
-                    strokeDashoffset: 5000 * (1 - animationProgress),
+                    strokeDasharray: 10000,
+                    strokeDashoffset: 10000 * (1 - animationProgress),
                     transition: 'stroke-dashoffset 0.1s linear',
                     opacity: visibleLines.war ? 0.6 : 0.2
                   }}
@@ -2206,8 +2206,8 @@ const CivilizationMetroMap = () => {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   style={{
-                    strokeDasharray: 5000,
-                    strokeDashoffset: 5000 * (1 - animationProgress),
+                    strokeDasharray: 10000,
+                    strokeDashoffset: 10000 * (1 - animationProgress),
                     transition: 'stroke-dashoffset 0.1s linear',
                     opacity: visibleLines.war ? 1 : 0.3
                   }}
@@ -2222,8 +2222,8 @@ const CivilizationMetroMap = () => {
                   strokeLinejoin="round"
                   filter="url(#glow-red)"
                   style={{
-                    strokeDasharray: 5000,
-                    strokeDashoffset: 5000 * (1 - animationProgress),
+                    strokeDasharray: 10000,
+                    strokeDashoffset: 10000 * (1 - animationProgress),
                     transition: 'stroke-dashoffset 0.1s linear',
                     opacity: visibleLines.war ? 0.9 : 0.2
                   }}
@@ -2242,8 +2242,8 @@ const CivilizationMetroMap = () => {
                   strokeWidth="28" 
                   strokeLinecap="round"
                   style={{
-                    strokeDasharray: 5000,
-                    strokeDashoffset: 5000 * (1 - animationProgress),
+                    strokeDasharray: 10000,
+                    strokeDashoffset: 10000 * (1 - animationProgress),
                     transition: 'stroke-dashoffset 0.1s linear',
                     opacity: visibleLines.tech ? 0.5 : 0.15
                   }}
@@ -2256,8 +2256,8 @@ const CivilizationMetroMap = () => {
                   strokeWidth="18" 
                   strokeLinecap="round"
                   style={{
-                    strokeDasharray: 5000,
-                    strokeDashoffset: 5000 * (1 - animationProgress),
+                    strokeDasharray: 10000,
+                    strokeDashoffset: 10000 * (1 - animationProgress),
                     transition: 'stroke-dashoffset 0.1s linear',
                     opacity: visibleLines.tech ? 1 : 0.3
                   }}
@@ -2271,8 +2271,8 @@ const CivilizationMetroMap = () => {
                   strokeLinecap="round"
                   filter="url(#glow-blue)"
                   style={{
-                    strokeDasharray: 5000,
-                    strokeDashoffset: 5000 * (1 - animationProgress),
+                    strokeDasharray: 10000,
+                    strokeDashoffset: 10000 * (1 - animationProgress),
                     transition: 'stroke-dashoffset 0.1s linear',
                     opacity: visibleLines.tech ? 1 : 0.3
                   }}
