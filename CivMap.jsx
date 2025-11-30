@@ -67,31 +67,44 @@ const CivilizationMetroMap = () => {
   const debouncedSearch = useDebounce(debouncedSearchCallback, 300);
   
   // Time range: 10,000 BCE to 2025 CE (12,025 years total)
-  // Using years from 0 = 10,000 BCE, so 2025 CE = 12,025
-  const TIME_START = -10000; // 10,000 BCE
-  const TIME_END = 2025; // 2025 CE
-  const TIME_RANGE = TIME_END - TIME_START; // 12,025 years
+  const TIME_START = -10000;
+  const TIME_END = 2025;
 
-  // Enhanced logarithmic scale conversion for massive timeline
-  // Maps years to X position (0 to VIEWBOX_WIDTH)
-  // Uses a more sophisticated logarithmic curve to show the full depth
+  // --- PIECEWISE SCALING ---
+  // Anchors distribute space manually to prevent clustering
+  // year: The historical year
+  // position: 0.0 to 1.0 (percentage of map width)
+  const TIME_ANCHORS = [
+    { year: -10000, position: 0.0 },
+    { year: -2000,  position: 0.25 }, // Give ancient history 25% of map
+    { year: 1000,   position: 0.50 }, // Middle ages at center
+    { year: 1800,   position: 0.70 }, // Industrial rev starts at 70%
+    { year: 1950,   position: 0.85 }, // Modern era gets plenty of space
+    { year: 2025,   position: 1.0 }   // End
+  ];
+
   const yearToX = (year) => {
-    // Convert year to position in timeline (0 = 10,000 BCE, 1 = 2025 CE)
-    const normalized = (year - TIME_START) / TIME_RANGE;
-    // Enhanced logarithmic scaling with better distribution
-    // This gives more breathing room across the entire timeline
-    // Using a combination of log and power functions for better visualization
-    if (normalized <= 0) return 0;
-    if (normalized >= 1) return VIEWBOX_WIDTH;
-    
-    // Logarithmic scale: log10(normalized * 9 + 1) gives us 0 to ~1
-    // Then we scale it across the full width with padding
-    const logValue = Math.log10(normalized * 9 + 1);
-    // Add some linear component for better distribution in modern era
-    const linearComponent = normalized * 0.3;
-    const combined = (logValue * 0.7 + linearComponent) * VIEWBOX_WIDTH;
-    
-    return Math.max(0, Math.min(VIEWBOX_WIDTH, combined));
+    if (year < TIME_START) return 0;
+    if (year > TIME_END) return VIEWBOX_WIDTH;
+
+    // Find the segment this year belongs to
+    const anchorIndex = TIME_ANCHORS.findIndex(a => year <= a.year);
+
+    if (anchorIndex === 0) return 0;
+    if (anchorIndex === -1) return VIEWBOX_WIDTH;
+
+    const startAnchor = TIME_ANCHORS[anchorIndex - 1];
+    const endAnchor = TIME_ANCHORS[anchorIndex];
+
+    // Calculate percentage within this specific segment
+    const segmentDuration = endAnchor.year - startAnchor.year;
+    const yearProgress = (year - startAnchor.year) / segmentDuration;
+
+    // Map to viewbox position
+    const segmentWidth = endAnchor.position - startAnchor.position;
+    const viewboxProgress = startAnchor.position + (yearProgress * segmentWidth);
+
+    return viewboxProgress * VIEWBOX_WIDTH;
   };
 
   // Y positions for each metro line's horizontal corridor
@@ -1712,7 +1725,7 @@ const CivilizationMetroMap = () => {
         </h1>
         <div className="flex items-center gap-2 mt-2">
           <span className="animate-pulse w-2 h-2 rounded-full bg-green-500"></span>
-          <p className="text-xs text-cyan-300/60 uppercase tracking-widest">Full Scale Visualization • 12,025 Years • Logarithmic Time Axis</p>
+          <p className="text-xs text-cyan-300/60 uppercase tracking-widest">Full Scale Visualization • 12,025 Years • Piecewise Time Axis</p>
         </div>
       </header>
 
@@ -2028,7 +2041,7 @@ const CivilizationMetroMap = () => {
                 className="uppercase tracking-widest"
                 fontWeight="bold"
               >
-                Time (Logarithmic Scale) • 12,025 Years of Human Civilization
+                Time (Piecewise Scale) • 12,025 Years of Human Civilization
               </text>
             </g>
 

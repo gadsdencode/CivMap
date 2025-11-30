@@ -6,23 +6,52 @@
 import { VIEWBOX, TIMELINE, LINE_Y_POSITIONS, CONVERGENCE } from '../constants/metroConfig';
 
 /**
- * Convert a historical year to X coordinate using logarithmic scaling
- * This gives more visual space to recent events (information density)
+ * Time Anchors for Piecewise Scaling
+ * key: The year in history
+ * position: The percentage (0.0 to 1.0) of the screen width this year should occupy
+ * 
+ * This creates a custom curve that expands modern history (high density)
+ * and compresses ancient history (low density) to prevent clustering.
+ */
+const TIME_ANCHORS = [
+  { year: -10000, position: 0.0 },  // Start: Left edge
+  { year: -2000,  position: 0.25 }, // Ancient history gets 25% of space
+  { year: 1000,   position: 0.50 }, // Middle ages at center screen
+  { year: 1800,   position: 0.70 }, // Industrial rev at 70%
+  { year: 1950,   position: 0.85 }, // Modern era gets significant breathing room
+  { year: 2025,   position: 1.0 }   // End: Right edge
+];
+
+/**
+ * Convert a historical year to X coordinate using Piecewise Linear Interpolation
+ * This ensures even spacing of events regardless of the actual time difference.
  * @param {number} year - Historical year (negative for BCE)
  * @returns {number} X coordinate in viewbox space
  */
 export function yearToX(year) {
-  const normalized = (year - TIMELINE.START) / TIMELINE.RANGE;
+  // Clamp year to timeline bounds
+  if (year < TIMELINE.START) return 0;
+  if (year > TIMELINE.END) return VIEWBOX.WIDTH;
   
-  if (normalized <= 0) return 0;
-  if (normalized >= 1) return VIEWBOX.WIDTH;
+  // Find the segment this year belongs to
+  const anchorIndex = TIME_ANCHORS.findIndex(a => year <= a.year);
   
-  // Logarithmic scale with linear blend for modern era visibility
-  const logValue = Math.log10(normalized * 9 + 1);
-  const linearComponent = normalized * 0.3;
-  const combined = (logValue * 0.7 + linearComponent) * VIEWBOX.WIDTH;
+  // Handle edge cases
+  if (anchorIndex === 0) return 0;
+  if (anchorIndex === -1) return VIEWBOX.WIDTH;
   
-  return Math.max(0, Math.min(VIEWBOX.WIDTH, combined));
+  const startAnchor = TIME_ANCHORS[anchorIndex - 1];
+  const endAnchor = TIME_ANCHORS[anchorIndex];
+  
+  // Calculate percentage within this specific segment
+  const segmentDuration = endAnchor.year - startAnchor.year;
+  const yearProgress = (year - startAnchor.year) / segmentDuration;
+  
+  // Map to viewbox position based on anchor positions
+  const segmentWidth = endAnchor.position - startAnchor.position;
+  const viewboxProgress = startAnchor.position + (yearProgress * segmentWidth);
+  
+  return viewboxProgress * VIEWBOX.WIDTH;
 }
 
 /**
@@ -120,4 +149,3 @@ export function zoomToPoint(viewBox, zoomFactor, centerPoint, containerSize) {
     height: newHeight
   });
 }
-

@@ -19,7 +19,8 @@ const MetroLine = memo(function MetroLine({
   if (!pathData || !isVisible) return null;
 
   const { colorDark, colorMid, color } = lineConfig;
-  const strokeDasharray = 5000;
+  // 10000px dasharray ensures continuous lines across 8000px viewbox
+  const strokeDasharray = 10000;
   const strokeDashoffset = strokeDasharray * (1 - animationProgress);
   
   const baseStyle = {
