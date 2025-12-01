@@ -226,6 +226,23 @@ const Station = memo(function Station({
           {station.yearLabel}
         </text>
       )}
+
+      {/* Cluster offset indicator - subtle connection line to original position */}
+      {station.wasOffset && (
+        <g opacity={isHovered || isSelected ? 0.6 : 0.25}>
+          <text
+            x={station.coords.x + 45}
+            y={station.coords.y - 35}
+            textAnchor="start"
+            fill={station.color}
+            fontSize={18}
+            fontFamily="monospace"
+            className="pointer-events-none select-none"
+          >
+            ≈
+          </text>
+        </g>
+      )}
     </g>
   );
 });

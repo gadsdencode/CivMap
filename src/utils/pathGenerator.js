@@ -4,6 +4,8 @@
  * Dynamically generates paths from station data to ensure perfect alignment
  */
 
+import { CONVERGENCE_OFFSETS } from '../constants/metroConfig';
+
 /**
  * Generate a smooth bezier curve path through points
  * Enhanced to handle straight lines (corridors) better
@@ -20,22 +22,29 @@ export function generateSmoothPath(points) {
     const curr = points[i];
     
     // Calculate control points
-    // If we are on a long straight segment (same Y), keep it straight
     const isHorizontal = Math.abs(prev.y - curr.y) < 1;
     
     if (isHorizontal) {
       // Linear line for horizontal segments
       d += ` L ${curr.x} ${curr.y}`;
     } else {
-      // Bezier curve for transitions
-      // Tension determines how "tight" the curve is. 0.4 is a smooth value.
-      const tension = 0.4;
-      
+      // Dynamic tension based on distance
+      // If points are very close horizontally but far vertically, we need lower tension
+      // to avoid "overshoot" loops
       const dx = curr.x - prev.x;
+      const dy = Math.abs(curr.y - prev.y);
+      
+      // Standard tension
+      let tension = 0.45;
+      
+      // If slope is very steep (short X, big Y), reduce tension
+      if (dx < dy * 0.5) {
+        tension = 0.3;
+      }
       
       // Control Point 1 (leaving previous)
       const cp1x = prev.x + (dx * tension);
-      const cp1y = prev.y; // Keep Y tangent flat at start to avoid dipping
+      const cp1y = prev.y; // Keep Y tangent flat at start
       
       // Control Point 2 (arriving at current)
       const cp2x = curr.x - (dx * tension);
@@ -71,7 +80,6 @@ export function generateBraidedPath(points) {
 /**
  * Generate all metro line paths dynamically based on stations
  * This ensures every line passes perfectly through the center of every station it serves
- * 
  * @param {Function} yearToX - Function to convert year to X coordinate
  * @param {number} viewboxHeight - Height of the viewbox
  * @param {Array} stations - Array of processed station objects
@@ -91,86 +99,115 @@ export function generateMetroPaths(yearToX, viewboxHeight, stations) {
   const CONVERGENCE_X = yearToX(2025);
   const CONVERGENCE_Y_BASE = viewboxHeight * 0.15;
   
-  // Convergence offsets to create a neat vertical bundle at the end
-  // This prevents z-fighting and messy overlap
-  const convergenceOffsets = {
-    tech: 0,
-    population: 15,
-    war: 30,
-    empire: 45,
-    philosophy: 60
-  };
-
   /**
    * Helper to get path points for a specific line
    * @param {string} lineKey - Line identifier (lowercase: 'tech', 'war', etc.)
    * @returns {Array<{x: number, y: number}>} Path points
    */
   const getPointsForLine = (lineKey) => {
-    // Convert lineKey to proper case for station matching
     const lineId = lineKey.charAt(0).toUpperCase() + lineKey.slice(1);
+    const corridorY = LINE_Y[lineKey];
     
     // 1. Start Point (Far Left)
     const points = [
-      { x: 0, y: LINE_Y[lineKey] },
-      { x: yearToX(-10000), y: LINE_Y[lineKey] }
+      { x: 0, y: corridorY },
+      { x: yearToX(-10000), y: corridorY }
     ];
     
-    // 2. Add all stations belonging to this line
+    // 2. Filter and Sort Stations
     const lineStations = stations
       .filter(s => s.lines.includes(lineId))
       .sort((a, b) => a.year - b.year);
     
-    lineStations.forEach(station => {
+    // 3. Connect Stations with Smart Waypoints
+    for (let i = 0; i < lineStations.length; i++) {
+      const station = lineStations[i];
+      const nextStation = lineStations[i + 1];
       const lastPt = points[points.length - 1];
       
-      // Optimization: Don't add a point if it's too close to the last one (prevents kinks)
-      if (Math.abs(lastPt.x - station.coords.x) > 50) {
-        // If station is on a different Y (hub/multi-line station), 
-        // add a transition point first to stay in lane until we need to curve
-        if (Math.abs(lastPt.y - station.coords.y) > 10) {
-          // Add a point just before the station to start the curve smoothly
-          const transitionX = station.coords.x - 100;
-          if (transitionX > lastPt.x) {
-            points.push({ x: transitionX, y: lastPt.y });
+      // Determine if we are "off corridor"
+      const isOnCorridor = Math.abs(lastPt.y - corridorY) < 1;
+      const stationIsOnCorridor = Math.abs(station.coords.y - corridorY) < 1;
+      
+      // Calculate dynamic ramp length based on vertical distance
+      // Steeper vertical changes need longer horizontal runways
+      const dy = Math.abs(lastPt.y - station.coords.y);
+      const rampLength = Math.max(100, dy * 1.5); // 1.5 ratio usually looks good
+      
+      // CHECK: Is there enough space to ramp to the station?
+      const distanceToStation = station.coords.x - lastPt.x;
+      
+      if (distanceToStation > rampLength * 2) {
+        // PLENTY OF SPACE:
+        // If we are not on corridor, return to it first
+        if (!isOnCorridor) {
+           const returnX = lastPt.x + rampLength;
+           // Only return if it doesn't overshoot the station ramp start
+           if (returnX < station.coords.x - rampLength) {
+             points.push({ x: returnX, y: corridorY });
+           }
+        }
+        
+        // Now travel along corridor (implicit) and ramp to station
+        if (!stationIsOnCorridor) {
+          const rampStartX = station.coords.x - rampLength;
+          // Ensure we don't backtrack
+          if (rampStartX > points[points.length - 1].x) {
+             points.push({ x: rampStartX, y: corridorY });
           }
         }
+      } 
+      // NOT ENOUGH SPACE: Direct connection (ZigZag)
+      // We rely on the Bezier curve to smooth this direct line
+      
+      // Add the station point
+      points.push({ x: station.coords.x, y: station.coords.y });
+      
+      // POST-STATION LOGIC:
+      // Should we return to corridor immediately after?
+      // Only if the next station is far away or doesn't exist.
+      if (nextStation) {
+        const distToNext = nextStation.coords.x - station.coords.x;
+        const nextDy = Math.abs(nextStation.coords.y - corridorY);
+        const nextRamp = Math.max(100, nextDy * 1.5);
         
-        // Add the actual station point
-        points.push({ x: station.coords.x, y: station.coords.y });
-        
-        // If we curved to a station, add a return point after to curve back to lane
-        if (Math.abs(lastPt.y - station.coords.y) > 10 && station.year < 2000) {
-          const returnX = station.coords.x + 100;
-          points.push({ x: returnX, y: LINE_Y[lineKey] });
+        // If next station is far, return to corridor
+        if (distToNext > (rampLength + nextRamp + 100)) {
+           if (!stationIsOnCorridor) {
+             const returnX = station.coords.x + rampLength;
+             points.push({ x: returnX, y: corridorY });
+           }
         }
-      }
-    });
-    
-    // 3. Add Convergence Points
-    const lastStation = lineStations[lineStations.length - 1];
-    const lastPoint = points[points.length - 1];
-    
-    // Add a pre-convergence point to smooth the curve upward
-    // Only if the last station is not already very close to 2025
-    if (!lastStation || lastStation.year < 2010) {
-      // Stay in lane until the very end
-      const preConvergeX = yearToX(2015);
-      if (preConvergeX > lastPoint.x) {
-        points.push({ x: preConvergeX, y: LINE_Y[lineKey] });
+        // Else: Stay at current Y or direct connect to next station
+      } else {
+        // No next station, definitely return to corridor for the finale
+        if (!stationIsOnCorridor) {
+           const returnX = station.coords.x + rampLength;
+           points.push({ x: returnX, y: corridorY });
+        }
       }
     }
     
-    // The Singularity Bundle - organized vertically
+    // 4. Convergence (The Singularity)
+    const lastPoint = points[points.length - 1];
+    const convergeY = CONVERGENCE_Y_BASE + (CONVERGENCE_OFFSETS[lineKey] || 0);
+    
+    // Smooth transition to convergence
+    const finalRampX = CONVERGENCE_X - 300;
+    
+    if (lastPoint.x < finalRampX) {
+      points.push({ x: finalRampX, y: lastPoint.y });
+    }
+    
     points.push({ 
       x: CONVERGENCE_X, 
-      y: CONVERGENCE_Y_BASE + convergenceOffsets[lineKey] 
+      y: convergeY 
     });
     
-    // Infinite Future (shoot off to the right and slightly up)
+    // 5. Infinite Future (shoot off to the right)
     points.push({ 
-      x: CONVERGENCE_X + 800, 
-      y: CONVERGENCE_Y_BASE + convergenceOffsets[lineKey] - 150
+      x: CONVERGENCE_X + 2000, 
+      y: convergeY 
     });
     
     return points;
@@ -184,111 +221,18 @@ export function generateMetroPaths(yearToX, viewboxHeight, stations) {
   const empirePoints = getPointsForLine('empire');
 
   return {
-    // Main paths - named to match existing color references
     blue: generateSmoothPath(techPoints),
     red: generateSmoothPath(warPoints),
-    green: generateBraidedPath(populationPoints), // Returns object with main, braid1, braid2
+    green: generateBraidedPath(populationPoints), 
     orange: generateSmoothPath(philosophyPoints),
     purple: generateSmoothPath(empirePoints),
     
-    // Also provide paths keyed by line ID for flexibility
     tech: generateSmoothPath(techPoints),
     war: generateSmoothPath(warPoints),
     population: generateBraidedPath(populationPoints),
     philosophy: generateSmoothPath(philosophyPoints),
     empire: generateSmoothPath(empirePoints),
     
-    // Disable complex connections for cleaner look
     connections: {}
   };
-}
-
-/**
- * Generate a path with multiple visual layers (shadow, main, core)
- * @param {Array<{x: number, y: number}>} points - Array of coordinate points
- * @returns {{main: string, shadow: string, core: string}} Path variants
- */
-export function generateLayeredPath(points) {
-  const main = generateSmoothPath(points);
-  
-  // Offset paths for visual depth (subtle, keeps same Y)
-  const shadowOffset = points.map(p => ({ x: p.x, y: p.y + 2 }));
-  const coreOffset = points.map(p => ({ x: p.x, y: p.y }));
-  
-  return {
-    main,
-    shadow: generateSmoothPath(shadowOffset),
-    core: generateSmoothPath(coreOffset)
-  };
-}
-
-/**
- * Create metro line path points for a specific line (legacy support)
- * @param {string} lineId - Line identifier ('tech', 'war', etc.)
- * @param {number} lineY - Y coordinate for this line's corridor
- * @param {Array<number>} keyYears - Years where this line has stations
- * @param {{x: number, y: number}} convergence - Convergence point
- * @param {Function} yearToX - Year to X coordinate converter
- * @returns {Array<{x: number, y: number}>} Path points
- */
-export function createLinePathPoints(lineId, lineY, keyYears, convergence, yearToX) {
-  // Sort years chronologically
-  const sortedYears = [...keyYears].sort((a, b) => a - b);
-  
-  // Generate horizontal path through all key years
-  const points = sortedYears.map(year => ({
-    x: yearToX(year),
-    y: lineY
-  }));
-  
-  // Add convergence curve at the end (modern era)
-  const lastPoint = points[points.length - 1];
-  if (lastPoint) {
-    // Gradual curve toward convergence
-    const midX = (lastPoint.x + convergence.x) / 2;
-    const midY = (lineY + convergence.y) / 2;
-    
-    points.push({ x: midX, y: midY });
-    points.push(convergence);
-  }
-  
-  return points;
-}
-
-/**
- * Generate all metro line paths (legacy support)
- * @param {Object} config - Configuration with yearToX, lineY positions, convergence
- * @param {Object} stationsByLine - Stations grouped by line
- * @returns {Object} Path strings keyed by line id
- */
-export function generateAllPaths(config, stationsByLine) {
-  const { yearToX, lineYPositions, convergencePoint, viewboxHeight } = config;
-  
-  const paths = {};
-  
-  Object.entries(lineYPositions).forEach(([lineName, yPercent]) => {
-    const lineY = yPercent * viewboxHeight;
-    const stations = stationsByLine[lineName] || [];
-    const keyYears = stations.map(s => s.year);
-    
-    // Ensure we have start and end points even without stations
-    if (keyYears.length === 0) {
-      keyYears.push(-10000, 2025);
-    }
-    
-    const points = createLinePathPoints(
-      lineName.toLowerCase(),
-      lineY,
-      keyYears,
-      convergencePoint,
-      yearToX
-    );
-    
-    paths[lineName.toLowerCase()] = {
-      d: generateSmoothPath(points),
-      points
-    };
-  });
-  
-  return paths;
 }

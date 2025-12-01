@@ -84,6 +84,16 @@ export const CONVERGENCE = {
   yPosition: 0.15
 };
 
+// Offsets for the final convergence bundle to prevent collision
+// Increased spacing to ensure lines do not overlap messily
+export const CONVERGENCE_OFFSETS = {
+  tech: 0,
+  population: 40,
+  war: 80,
+  empire: 120,
+  philosophy: 160
+};
+
 // Journey Mode - Key stations for guided tour
 export const JOURNEY_STATIONS = [
   'neolithic',

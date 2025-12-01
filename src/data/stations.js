@@ -945,28 +945,117 @@ const LINE_COLOR_MAP = {
 };
 
 /**
+ * Collision detection threshold - stations within this pixel distance are considered overlapping
+ */
+const COLLISION_THRESHOLD = 70; // pixels - diameter of station marker
+
+/**
+ * Horizontal offset amount to apply when stations overlap
+ */
+const COLLISION_OFFSET_X = 80; // pixels to offset horizontally (keeps stations on their lines)
+
+/**
  * Process raw station data into fully computed station objects
- * Computes coordinates and applies color based on primary line
+ * Computes coordinates, applies color based on primary line,
+ * and resolves overlapping station positions using HORIZONTAL offsets
+ * to keep stations on their respective metro lines
  * @returns {Array} Processed station array with computed coordinates, colors, and flattened narrative
  */
 export function processStations() {
-  return STATION_DATA.map(station => {
+  // First pass: compute initial coordinates
+  const stationsWithCoords = STATION_DATA.map(station => {
     const primaryLine = station.lines[0];
     const yPosition = LINE_Y_POSITIONS[primaryLine] || 0.5;
     
     return {
       ...station,
-      // Computed color based on primary line
       color: station.significance === 'current' ? '#fff' : (LINE_COLOR_MAP[primaryLine] || '#ffffff'),
-      // Computed coordinates
       coords: {
         x: yearToX(station.year),
         y: yPosition * VIEWBOX.HEIGHT
       },
-      // Flatten narrative properties for backward compatibility with inline rendering
       visual: station.narrative?.visual,
       atmosphere: station.narrative?.atmosphere,
       insight: station.narrative?.insight
+    };
+  });
+
+  // Second pass: detect and resolve collisions with HORIZONTAL offsets
+  const resolvedStations = resolveStationCollisions(stationsWithCoords);
+  
+  return resolvedStations;
+}
+
+/**
+ * Detect overlapping stations and apply HORIZONTAL offsets to separate them
+ * Stations stay on their line's Y position - only X is adjusted
+ * @param {Array} stations - Array of stations with initial coordinates
+ * @returns {Array} Stations with adjusted X coordinates to prevent overlap
+ */
+function resolveStationCollisions(stations) {
+  // Sort by X coordinate (chronological order) then by Y for consistent processing
+  const sortedStations = [...stations].sort((a, b) => {
+    if (Math.abs(a.coords.x - b.coords.x) < 1) {
+      return a.coords.y - b.coords.y; // Same X, sort by Y
+    }
+    return a.coords.x - b.coords.x;
+  });
+  
+  // Track all placed stations with their final positions
+  const placedStations = [];
+  
+  return sortedStations.map(station => {
+    let x = station.coords.x;
+    const y = station.coords.y; // Y stays fixed - station must be on its line!
+    
+    // Check for collisions with already-placed stations
+    let collisionFound = true;
+    let attempts = 0;
+    const maxAttempts = 20;
+    let offsetDirection = 1; // Alternate left/right
+    let offsetMultiplier = 0;
+    const originalX = x;
+    
+    while (collisionFound && attempts < maxAttempts) {
+      collisionFound = false;
+      
+      for (const placed of placedStations) {
+        const xDist = Math.abs(x - placed.x);
+        const yDist = Math.abs(y - placed.y);
+        
+        // Check if positions are too close (collision)
+        // Only collide if both X AND Y are close (same area of the map)
+        if (xDist < COLLISION_THRESHOLD && yDist < COLLISION_THRESHOLD) {
+          collisionFound = true;
+          break;
+        }
+      }
+      
+      if (collisionFound) {
+        // Apply HORIZONTAL offset in alternating directions (left/right)
+        offsetMultiplier++;
+        x = originalX + (COLLISION_OFFSET_X * offsetMultiplier * offsetDirection);
+        offsetDirection *= -1; // Flip direction for next attempt
+        
+        // Constrain X to viewbox bounds
+        x = Math.max(50, Math.min(VIEWBOX.WIDTH - 50, x));
+      }
+      
+      attempts++;
+    }
+    
+    // Record this station's final position
+    placedStations.push({ x, y, id: station.id });
+    
+    // Return station with adjusted X coordinate (Y unchanged - stays on line!)
+    return {
+      ...station,
+      coords: {
+        x: x,
+        y: y // Y is NEVER modified - station stays on its line
+      },
+      // Track if this station was offset (useful for UI hints)
+      wasOffset: Math.abs(x - originalX) > 1
     };
   });
 }
