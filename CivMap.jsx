@@ -9,7 +9,8 @@ import { LoadingOverlay, LoadingSpinner } from './components/Loading';
 import AccessibleButton from './components/AccessibleButton';
 import { MetroLine, Station } from './src/components/metro';
 import { generateSmoothPath, generateMetroPaths } from './src/utils/pathGenerator';
-import { LINES, VIEWBOX as VIEWBOX_CONFIG } from './src/constants/metroConfig';
+import { yearToX } from './src/utils/coordinates';
+import { LINES, VIEWBOX as VIEWBOX_CONFIG, TIMELINE } from './src/constants/metroConfig';
 import { useMapState } from './src/hooks/useMapState';
 import { processStations, ICON_TYPES } from './src/data/stations';
 
@@ -79,49 +80,9 @@ const CivilizationMetroMap = () => {
   }, [announce]);
   
   const debouncedSearch = useDebounce(debouncedSearchCallback, 300);
-  
-  // Time range: 10,000 BCE to 2025 CE (12,025 years total)
-  const TIME_START = -10000;
-  const TIME_END = 2025;
-
-  // --- PIECEWISE SCALING ---
-  // Anchors distribute space manually to prevent clustering
-  // year: The historical year
-  // position: 0.0 to 1.0 (percentage of map width)
-  const TIME_ANCHORS = [
-    { year: -10000, position: 0.0 },
-    { year: -2000,  position: 0.25 }, // Give ancient history 25% of map
-    { year: 1000,   position: 0.50 }, // Middle ages at center
-    { year: 1800,   position: 0.70 }, // Industrial rev starts at 70%
-    { year: 1950,   position: 0.85 }, // Modern era gets plenty of space
-    { year: 2025,   position: 1.0 }   // End
-  ];
-
-  const yearToX = (year) => {
-    if (year < TIME_START) return 0;
-    if (year > TIME_END) return VIEWBOX_WIDTH;
-
-    // Find the segment this year belongs to
-    const anchorIndex = TIME_ANCHORS.findIndex(a => year <= a.year);
-
-    if (anchorIndex === 0) return 0;
-    if (anchorIndex === -1) return VIEWBOX_WIDTH;
-
-    const startAnchor = TIME_ANCHORS[anchorIndex - 1];
-    const endAnchor = TIME_ANCHORS[anchorIndex];
-
-    // Calculate percentage within this specific segment
-    const segmentDuration = endAnchor.year - startAnchor.year;
-    const yearProgress = (year - startAnchor.year) / segmentDuration;
-
-    // Map to viewbox position
-    const segmentWidth = endAnchor.position - startAnchor.position;
-    const viewboxProgress = startAnchor.position + (yearProgress * segmentWidth);
-
-    return viewboxProgress * VIEWBOX_WIDTH;
-  };
 
   // Station data - processed from single source of truth (src/data/stations.js)
+  // yearToX imported from src/utils/coordinates.js - single source of truth for coordinate calculations
   // Eliminates data duplication - updates to stations.js reflect everywhere
   const stations = useMemo(() => {
     // Get processed stations from central data source
@@ -475,7 +436,7 @@ const CivilizationMetroMap = () => {
       1800, 1850, 1900, 1950, 2000, 2010, 2025
     ];
     years.forEach(year => {
-      if (year >= TIME_START && year <= TIME_END) {
+      if (year >= TIMELINE.START && year <= TIMELINE.END) {
         markers.push({
           year,
           label: year < 0 ? `${Math.abs(year)} BCE` : year === 0 ? '1 CE' : `${year} CE`,
