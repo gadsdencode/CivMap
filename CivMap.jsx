@@ -990,61 +990,170 @@ const CivilizationMetroMap = () => {
               filterId="glow-blue"
             />
 
-            {/* Path-to-Station visual connections - shows the line-station intersection points */}
-            {filteredStations.map((s) => {
-              const isVisible = s.lines.some(line => {
-                const lineMap = { 'Tech': 'tech', 'Population': 'population', 'War': 'war', 'Empire': 'empire', 'Philosophy': 'philosophy' };
-                return visibleLines[lineMap[line]] !== false;
-              });
-              if (!isVisible) return null;
-              
-              // Draw small circles at exact station coordinates for each line
-              return s.lines.map((line) => {
-                const lineMap = { 'Tech': 'tech', 'Population': 'population', 'War': 'war', 'Empire': 'empire', 'Philosophy': 'philosophy' };
-                if (!visibleLines[lineMap[line]]) return null;
-                const colors = { 'Tech': '#22d3ee', 'Population': '#22c55e', 'War': '#ef4444', 'Empire': '#9333ea', 'Philosophy': '#fbbf24' };
-                return (
-                  <circle
-                    key={`${s.id}-${line}-anchor`}
-                    cx={s.coords.x}
-                    cy={s.coords.y}
-                    r="8"
-                    fill={colors[line]}
-                    className="pointer-events-none"
-                  />
-                );
-              });
-            })}
-
-            {/* Stations - Using Station Component */}
+            {/* PROPER METRO MAP: Render each station ON ITS LINE(S) at the line's Y position */}
+            {/* For multi-line stations, render a marker on EACH line */}
             {filteredStations.map((s) => {
               const isHovered = hoveredStation === s.id;
               const isSelected = selectedStation?.id === s.id;
               const isInJourney = journeyMode && journeyStations[journeyIndex] === s.id;
               const isSearchMatch = searchQuery && (s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.yearLabel.toLowerCase().includes(searchQuery.toLowerCase()));
               const shouldShowLabel = showAllLabels || isHovered || isSelected || isInJourney || isSearchMatch;
+              const isActive = isHovered || isSelected || isInJourney;
               
+              // Line Y positions (must match pathGenerator.js)
+              const lineYPositions = {
+                'Tech': 0.18 * VIEWBOX_CONFIG.HEIGHT,
+                'War': 0.36 * VIEWBOX_CONFIG.HEIGHT,
+                'Population': 0.50 * VIEWBOX_CONFIG.HEIGHT,
+                'Philosophy': 0.64 * VIEWBOX_CONFIG.HEIGHT,
+                'Empire': 0.82 * VIEWBOX_CONFIG.HEIGHT
+              };
+              
+              const lineMap = { 'Tech': 'tech', 'Population': 'population', 'War': 'war', 'Empire': 'empire', 'Philosophy': 'philosophy' };
+              const colors = { 'Tech': '#22d3ee', 'Population': '#22c55e', 'War': '#ef4444', 'Empire': '#9333ea', 'Philosophy': '#fbbf24' };
+              
+              // Get visible lines for this station
+              const visibleStationLines = s.lines.filter(line => visibleLines[lineMap[line]] !== false);
+              if (visibleStationLines.length === 0 && !isSearchMatch) return null;
+              
+              // Render a marker on EACH line this station belongs to
               return (
-                <Station
-                  key={s.id}
-                  station={s}
-                  isHovered={isHovered}
-                  isSelected={isSelected}
-                  isInJourney={isInJourney}
-                  isSearchMatch={isSearchMatch}
-                  showLabel={shouldShowLabel}
-                  onHover={actions.hoverStation}
-                  onSelect={(station) => {
-                    actions.selectStation(station);
-                    if (journeyMode) {
-                      const idx = journeyStations.indexOf(station.id);
-                      if (idx !== -1) {
-                        actions.journeyGoTo(idx, station);
-                      }
-                    }
-                  }}
-                  visibleLines={visibleLines}
-                />
+                <g key={s.id}>
+                  {/* Vertical connector for multi-line stations */}
+                  {visibleStationLines.length > 1 && (
+                    <line
+                      x1={s.coords.x}
+                      y1={Math.min(...visibleStationLines.map(l => lineYPositions[l]))}
+                      x2={s.coords.x}
+                      y2={Math.max(...visibleStationLines.map(l => lineYPositions[l]))}
+                      stroke="#ffffff"
+                      strokeWidth={4}
+                      strokeOpacity={0.3}
+                      strokeDasharray="8,8"
+                      className="pointer-events-none"
+                    />
+                  )}
+                  
+                  {/* Station marker on each line */}
+                  {visibleStationLines.map((line, idx) => {
+                    const lineY = lineYPositions[line];
+                    const lineColor = colors[line];
+                    const isPrimaryLine = idx === 0;
+                    const radius = isActive ? 20 : 15;
+                    
+                    return (
+                      <g
+                        key={`${s.id}-${line}`}
+                        className="station-marker"
+                        style={{ cursor: 'pointer' }}
+                        onMouseEnter={() => actions.hoverStation(s.id)}
+                        onMouseLeave={() => actions.hoverStation(null)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          actions.selectStation(s);
+                          if (journeyMode) {
+                            const jdx = journeyStations.indexOf(s.id);
+                            if (jdx !== -1) actions.journeyGoTo(jdx, s);
+                          }
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        {/* Glow effect on active */}
+                        {isActive && (
+                          <circle
+                            cx={s.coords.x}
+                            cy={lineY}
+                            r={radius * 2.5}
+                            fill={lineColor}
+                            fillOpacity={0.15}
+                            className="pointer-events-none"
+                          />
+                        )}
+                        
+                        {/* Outer ring */}
+                        <circle
+                          cx={s.coords.x}
+                          cy={lineY}
+                          r={radius}
+                          fill="#0a0a0a"
+                          stroke={lineColor}
+                          strokeWidth={isActive ? 6 : 4}
+                        />
+                        
+                        {/* Inner dot */}
+                        <circle
+                          cx={s.coords.x}
+                          cy={lineY}
+                          r={isActive ? 8 : 6}
+                          fill={lineColor}
+                        />
+                        
+                        {/* Hub indicator */}
+                        {s.significance === 'hub' && (
+                          <circle
+                            cx={s.coords.x}
+                            cy={lineY}
+                            r={3}
+                            fill="#ffffff"
+                          />
+                        )}
+                      </g>
+                    );
+                  })}
+                  
+                  {/* Label - only show once, above the topmost marker */}
+                  {shouldShowLabel && (
+                    <g className="pointer-events-none select-none">
+                      {(() => {
+                        const topY = Math.min(...visibleStationLines.map(l => lineYPositions[l]));
+                        return (
+                          <>
+                            {/* Name label background */}
+                            <text
+                              x={s.coords.x}
+                              y={topY - 30}
+                              textAnchor="middle"
+                              fill="#000"
+                              fontSize={isActive ? 28 : 24}
+                              fontFamily="'JetBrains Mono', monospace"
+                              fontWeight="700"
+                              stroke="#000"
+                              strokeWidth={6}
+                              strokeLinejoin="round"
+                              opacity={0.5}
+                            >
+                              {s.name.length > 25 ? `${s.name.substring(0, 25)}…` : s.name}
+                            </text>
+                            {/* Name label */}
+                            <text
+                              x={s.coords.x}
+                              y={topY - 30}
+                              textAnchor="middle"
+                              fill="#ffffff"
+                              fontSize={isActive ? 28 : 24}
+                              fontFamily="'JetBrains Mono', monospace"
+                              fontWeight="700"
+                            >
+                              {s.name.length > 25 ? `${s.name.substring(0, 25)}…` : s.name}
+                            </text>
+                            {/* Year label */}
+                            <text
+                              x={s.coords.x}
+                              y={topY - 6}
+                              textAnchor="middle"
+                              fill={colors[visibleStationLines[0]]}
+                              fontSize={20}
+                              fontFamily="'JetBrains Mono', monospace"
+                              fontWeight="600"
+                            >
+                              {s.yearLabel}
+                            </text>
+                          </>
+                        );
+                      })()}
+                    </g>
+                  )}
+                </g>
               );
             })}
           </svg>

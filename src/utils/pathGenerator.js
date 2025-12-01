@@ -1,14 +1,19 @@
 /**
  * SVG Path Generation Utilities
- * ULTRA-SIMPLIFIED v4 - Direct station-to-station connections ONLY
  * 
- * No corridor logic, no extra waypoints, just pure station connections.
+ * PROPER METRO MAP APPROACH:
+ * - Each line is a CONTINUOUS horizontal path at its corridor Y
+ * - Stations on that line appear AT the line's Y (not at some other line's Y)
+ * - Lines only deviate for convergence at 2025
+ * 
+ * This creates the classic metro map aesthetic where lines are mostly horizontal
+ * with smooth curves only where necessary.
  */
 
 import { CONVERGENCE_OFFSETS, LINE_Y_POSITIONS, CONVERGENCE } from '../constants/metroConfig';
 
 /**
- * Generate smooth S-curve path with horizontal tangents at each point
+ * Generate smooth path with horizontal tangents
  */
 export function generateSmoothPath(points) {
   if (!points || points.length < 2) return '';
@@ -22,10 +27,8 @@ export function generateSmoothPath(points) {
     const dy = Math.abs(curr.y - prev.y);
 
     if (dy < 1) {
-      // Horizontal - straight line
       d += ` L ${curr.x} ${curr.y}`;
     } else {
-      // S-curve with horizontal tangents
       const cp1x = prev.x + (dx * 0.5);
       const cp2x = curr.x - (dx * 0.5);
       d += ` C ${cp1x} ${prev.y}, ${cp2x} ${curr.y}, ${curr.x} ${curr.y}`;
@@ -46,10 +49,12 @@ export function generateBraidedPath(points) {
 }
 
 /**
- * ULTRA-SIMPLE path generation
- * - Start at left edge on corridor
- * - Connect directly to each station in order (NO extra waypoints)
- * - End at convergence
+ * PROPER Metro Map Path Generation
+ * 
+ * KEY INSIGHT: Each line draws stations at ITS OWN Y CORRIDOR.
+ * The station's X position comes from the data, but Y is the LINE's corridor Y.
+ * 
+ * This creates continuous horizontal lines with stations as stops along the way.
  */
 export function generateMetroPaths(yearToX, viewboxHeight, stations) {
   const CONVERGENCE_X = yearToX(2025);
@@ -69,17 +74,23 @@ export function generateMetroPaths(yearToX, viewboxHeight, stations) {
     // START: Left edge at corridor Y
     points.push({ x: 0, y: corridorY });
 
-    // ALL STATIONS: Direct connection to each one
+    // ALL STATIONS: Place them at THIS LINE'S Y, not their stored Y
+    // This keeps the line continuous and horizontal
     for (const station of lineStations) {
-      points.push({ x: station.coords.x, y: station.coords.y });
+      points.push({ 
+        x: station.coords.x, 
+        y: corridorY  // KEY: Use the LINE's Y, not station's stored Y
+      });
     }
 
-    // END: Convergence point
+    // END: Curve to convergence point
     const finalY = CONVERGENCE_Y + (CONVERGENCE_OFFSETS[lineKey] || 0);
     
-    // Only add convergence if we're not already there
-    const lastPoint = points[points.length - 1];
-    if (lastPoint.x < CONVERGENCE_X - 10) {
+    const lastX = lineStations.length > 0 
+      ? lineStations[lineStations.length - 1].coords.x 
+      : 0;
+    
+    if (lastX < CONVERGENCE_X - 10) {
       points.push({ x: CONVERGENCE_X, y: finalY });
     }
     
@@ -102,4 +113,12 @@ export function generateMetroPaths(yearToX, viewboxHeight, stations) {
     empire: generateSmoothPath(buildPath('empire')),
     connections: {}
   };
+}
+
+/**
+ * Get station Y position for a specific line
+ * Used by station rendering to position stations on each line they belong to
+ */
+export function getStationYForLine(lineName, viewboxHeight) {
+  return (LINE_Y_POSITIONS[lineName] || 0.5) * viewboxHeight;
 }
