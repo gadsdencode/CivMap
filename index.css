@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== Animation Keyframes ===== */
+
 @keyframes slideIn {
   from {
     transform: translateY(-20px);
@@ -11,5 +13,105 @@
     transform: translateY(0);
     opacity: 1;
   }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px currentColor);
+    opacity: 0.8;
+  }
+  50% {
+    filter: drop-shadow(0 0 16px currentColor);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ===== Metro Map Specific Styles ===== */
+
+/* Smooth SVG rendering */
+svg {
+  shape-rendering: geometricPrecision;
+}
+
+/* Station hover cursor */
+.station {
+  cursor: pointer;
+  outline: none;
+}
+
+.station:focus-visible {
+  outline: 2px solid #22d3ee;
+  outline-offset: 4px;
+}
+
+/* Metro line hover effects */
+.metro-line {
+  transition: opacity 250ms ease;
+}
+
+/* Minimap styles */
+.minimap-viewport {
+  transition: all 100ms ease-out;
+}
+
+/* Scrollbar styling for sidebar/details */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 100, 100, 0.5);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 100, 100, 0.7);
+}
+
+/* Selection styling */
+::selection {
+  background: rgba(34, 211, 238, 0.3);
+  color: inherit;
+}
+
+/* Focus ring for accessibility */
+*:focus-visible {
+  outline: 2px solid #22d3ee;
+  outline-offset: 2px;
 }
 

@@ -946,13 +946,15 @@ const LINE_COLOR_MAP = {
 
 /**
  * Collision detection threshold - stations within this pixel distance are considered overlapping
+ * INCREASED from 70 to 120 for more breathing room between stations
  */
-const COLLISION_THRESHOLD = 70; // pixels - diameter of station marker
+const COLLISION_THRESHOLD = 120; // pixels - generous spacing prevents crowding
 
 /**
  * Horizontal offset amount to apply when stations overlap
+ * INCREASED from 80 to 150 to flatten curve angles when stations are offset
  */
-const COLLISION_OFFSET_X = 80; // pixels to offset horizontally (keeps stations on their lines)
+const COLLISION_OFFSET_X = 150; // pixels to offset horizontally (keeps stations on their lines)
 
 /**
  * Process raw station data into fully computed station objects
