@@ -115,3 +115,47 @@ svg {
   outline-offset: 2px;
 }
 
+/* ===== Performance-First Animations ===== */
+
+/* Optimized Glitch Effect (Replaces SVG feTurbulence) */
+@keyframes shake-glitch {
+  0% { transform: translate(0, 0); }
+  20% { transform: translate(-2px, 2px); }
+  40% { transform: translate(-2px, -2px); }
+  60% { transform: translate(2px, 2px); }
+  80% { transform: translate(2px, -2px); }
+  100% { transform: translate(0, 0); }
+}
+
+.crisis-active {
+  animation: shake-glitch 0.2s cubic-bezier(.36,.07,.19,.97) infinite;
+}
+
+/* Narrative Focus Pulse */
+@keyframes narrative-pulse {
+  0%, 100% { 
+    stroke-opacity: 1; 
+    stroke-width: var(--base-width, 8px); 
+  }
+  50% { 
+    stroke-opacity: 0.6; 
+    stroke-width: calc(var(--base-width, 8px) + 4px); 
+  }
+}
+
+/* Line Flow Animation (Simulates movement/time) */
+@keyframes dash-flow {
+  to { stroke-dashoffset: 0; }
+}
+
+.metro-line-narrative-active {
+  /* GPU acceleration hint */
+  will-change: stroke-width, opacity; 
+  filter: drop-shadow(0 0 8px currentColor);
+}
+
+.station-label {
+  /* Ensure text is readable */
+  text-shadow: 0 2px 4px rgba(0,0,0,0.9);
+}
+

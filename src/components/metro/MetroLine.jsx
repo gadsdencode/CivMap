@@ -1,20 +1,20 @@
 /**
  * MetroLine Component
- * Renders a single metro line with proper layering for depth and visual polish
+ * Performance-First Implementation with Narrative Focus States
+ * 
+ * KEY UPGRADES:
+ * - Removed heavy SVG filters in favor of CSS animations (GPU accelerated)
+ * - Added narrative focus states to guide user attention
+ * - Optimized rendering with static calculations
  * 
  * VISUAL LAYERS (bottom to top):
  * 1. Shadow/depth layer - Creates 3D effect
  * 2. Main line - Primary visible stroke
- * 3. Glowing core - Neon-like center glow
- * 
- * DESIGN PRINCIPLES:
- * - Smooth animation with CSS transitions
- * - Clear visual hierarchy through layering
- * - Proper opacity handling for filtered states
+ * 3. Glowing core - Neon-like center glow (pulses on narrative focus)
  */
 
 import React, { memo, useMemo } from 'react';
-import { PATH_STROKE, EFFECTS, ANIMATION } from '../../constants/metroConfig';
+import { PATH_STROKE, ANIMATION } from '../../constants/metroConfig';
 
 /**
  * Single metro line with shadow, main stroke, and glowing core
@@ -24,38 +24,35 @@ const MetroLine = memo(function MetroLine({
   lineConfig,
   animationProgress = 1,
   isVisible = true,
-  isHighlighted = false,
-  filterId
+  isNarrativeFocus = false, // New: Is this line the current story focus?
+  isCrisisMode = false      // New: Replaces filterId for glitches
 }) {
   if (!pathData) return null;
 
   const { id, colorDark, colorMid, color, colorGlow } = lineConfig;
   
-  // Calculate stroke dash for animation
-  // 12000px dasharray ensures continuous lines across the full 8000px viewbox with margin
+  // 1. Performance: Static dasharray calculation
   const strokeDasharray = 12000;
   const strokeDashoffset = strokeDasharray * (1 - animationProgress);
   
-  // Memoize style objects for performance
-  const baseAnimationStyle = useMemo(() => ({
-    strokeDasharray,
-    strokeDashoffset,
-    transition: `stroke-dashoffset ${ANIMATION.pathDrawDuration}ms ease-out`
-  }), [strokeDasharray, strokeDashoffset]);
-
-  // Opacity calculations based on visibility and highlight state
-  const opacityMultiplier = isVisible ? 1 : EFFECTS.lineInactiveOpacity;
-  const highlightBoost = isHighlighted ? 1.1 : 1;
+  // 2. Visual Persuasion: Dynamic styles based on narrative state
+  const mainOpacity = isVisible ? (isNarrativeFocus ? 1 : 0.6) : 0.1;
+  const glowOpacity = isVisible ? (isNarrativeFocus ? 0.9 : 0.4) : 0;
+  
+  // CSS class for performance-friendly animation
+  const lineClass = `metro-line ${isCrisisMode ? 'crisis-active' : ''} ${isNarrativeFocus ? 'metro-line-narrative-active' : ''}`;
 
   return (
     <g 
-      className="metro-line" 
+      className={lineClass} 
       data-line={id}
-      style={{
-        transition: `opacity ${ANIMATION.transitionDuration}ms ease`
+      style={{ 
+        '--base-width': `${PATH_STROKE.main}px`, 
+        color: colorGlow,
+        transition: 'opacity 0.5s ease'
       }}
     >
-      {/* Layer 1: Background shadow for depth */}
+      {/* Layer 1: Depth/Shadow (Static) */}
       <path
         d={pathData}
         fill="none"
@@ -63,13 +60,13 @@ const MetroLine = memo(function MetroLine({
         strokeWidth={PATH_STROKE.background}
         strokeLinecap="round"
         strokeLinejoin="round"
-        style={{
-          ...baseAnimationStyle,
-          opacity: Math.min(0.5 * opacityMultiplier, 0.5)
+        style={{ 
+          opacity: isVisible ? 0.5 : 0.05,
+          transition: 'opacity 0.5s ease'
         }}
       />
       
-      {/* Layer 2: Main line stroke */}
+      {/* Layer 2: Main Body (Animated Draw) */}
       <path
         d={pathData}
         fill="none"
@@ -77,42 +74,29 @@ const MetroLine = memo(function MetroLine({
         strokeWidth={PATH_STROKE.main}
         strokeLinecap="round"
         strokeLinejoin="round"
+        strokeDasharray={strokeDasharray}
+        strokeDashoffset={strokeDashoffset}
         style={{
-          ...baseAnimationStyle,
-          opacity: EFFECTS.lineActiveOpacity * opacityMultiplier * highlightBoost
+          opacity: mainOpacity,
+          transition: `stroke-dashoffset ${ANIMATION.pathDrawDuration}ms ease-out, opacity 0.3s ease`
         }}
       />
       
-      {/* Layer 3: Glowing core - creates the neon effect */}
+      {/* Layer 3: The Narrative Core (Glows/Pulses on Focus) */}
       <path
         d={pathData}
         fill="none"
         stroke={colorGlow || color}
-        strokeWidth={PATH_STROKE.core}
+        strokeWidth={isNarrativeFocus ? PATH_STROKE.core + 2 : PATH_STROKE.core}
         strokeLinecap="round"
         strokeLinejoin="round"
-        filter={filterId ? `url(#${filterId})` : undefined}
+        strokeDasharray={strokeDasharray}
+        strokeDashoffset={strokeDashoffset}
         style={{
-          ...baseAnimationStyle,
-          opacity: 0.85 * opacityMultiplier * highlightBoost
+          opacity: glowOpacity,
+          transition: 'opacity 0.3s ease, stroke-width 0.3s ease'
         }}
       />
-
-      {/* Layer 4: Ultra-bright center (optional, for highlighted lines) */}
-      {isHighlighted && (
-        <path
-          d={pathData}
-          fill="none"
-          stroke="#ffffff"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{
-            ...baseAnimationStyle,
-            opacity: 0.4 * opacityMultiplier
-          }}
-        />
-      )}
     </g>
   );
 });
@@ -126,7 +110,8 @@ export const BraidedMetroLine = memo(function BraidedMetroLine({
   lineConfig,
   animationProgress = 1,
   isVisible = true,
-  filterId
+  isNarrativeFocus = false,
+  isCrisisMode = false
 }) {
   if (!pathData || typeof pathData !== 'object') return null;
 
@@ -142,14 +127,20 @@ export const BraidedMetroLine = memo(function BraidedMetroLine({
     transition: `stroke-dashoffset ${ANIMATION.pathDrawDuration}ms ease-out`
   }), [strokeDasharray, strokeDashoffset]);
 
-  const opacityMultiplier = isVisible ? 1 : EFFECTS.lineInactiveOpacity;
+  const opacityMultiplier = isVisible ? 1 : 0.1;
+  const mainOpacity = isVisible ? (isNarrativeFocus ? 1 : 0.6) : 0.1;
+  const glowOpacity = isVisible ? (isNarrativeFocus ? 0.9 : 0.4) : 0;
+  
+  const lineClass = `metro-line braided ${isCrisisMode ? 'crisis-active' : ''} ${isNarrativeFocus ? 'metro-line-narrative-active' : ''}`;
 
   return (
     <g 
-      className="metro-line braided" 
+      className={lineClass}
       data-line={id}
-      style={{
-        transition: `opacity ${ANIMATION.transitionDuration}ms ease`
+      style={{ 
+        '--base-width': `${PATH_STROKE.main}px`,
+        color: colorGlow,
+        transition: 'opacity 0.5s ease'
       }}
     >
       {/* Shadow layers for all strands */}
@@ -200,7 +191,7 @@ export const BraidedMetroLine = memo(function BraidedMetroLine({
         strokeLinecap="round"
         style={{
           ...baseStyle,
-          opacity: EFFECTS.lineActiveOpacity * opacityMultiplier
+          opacity: mainOpacity
         }}
       />
 
@@ -209,12 +200,12 @@ export const BraidedMetroLine = memo(function BraidedMetroLine({
         d={main}
         fill="none"
         stroke={colorGlow || color}
-        strokeWidth={PATH_STROKE.core}
+        strokeWidth={isNarrativeFocus ? PATH_STROKE.core + 2 : PATH_STROKE.core}
         strokeLinecap="round"
-        filter={filterId ? `url(#${filterId})` : undefined}
         style={{
           ...baseStyle,
-          opacity: 0.85 * opacityMultiplier
+          opacity: glowOpacity,
+          transition: 'opacity 0.3s ease, stroke-width 0.3s ease'
         }}
       />
 

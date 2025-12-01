@@ -136,6 +136,21 @@ const CivilizationMetroMap = () => {
     return generateMetroPaths(yearToX, VIEWBOX_HEIGHT, stations);
   }, [yearToX, stations]);
 
+  // Calculate current zoom level for LOD (Level of Detail)
+  // VIEWBOX_WIDTH is 8000. If viewBox.width is 8000, zoom is 1. If 4000, zoom is 2.
+  const currentZoom = useMemo(() => {
+    return VIEWBOX_WIDTH / viewBox.width;
+  }, [viewBox.width]);
+
+  // Determine narrative focus: Which line should be highlighted based on selected station?
+  const narrativeFocusLine = useMemo(() => {
+    if (!selectedStation || !selectedStation.lines || selectedStation.lines.length === 0) {
+      return null;
+    }
+    // Focus on the primary line (first line) of the selected station
+    return selectedStation.lines[0].toLowerCase();
+  }, [selectedStation]);
+
   // Initialize viewBox on mount - Human-Centric: Show meaningful overview
   useEffect(() => {
     try {
@@ -1225,12 +1240,14 @@ const CivilizationMetroMap = () => {
               </text>
             </g>
 
-            {/* Metro Lines - Using MetroLine Component */}
+            {/* Metro Lines - Performance-First with Narrative Focus */}
             <MetroLine
               pathData={paths.orange}
               lineConfig={LINES.Philosophy}
               animationProgress={animationProgress}
               isVisible={visibleLines.philosophy}
+              isNarrativeFocus={narrativeFocusLine === 'philosophy'}
+              isCrisisMode={false}
             />
             
             <MetroLine
@@ -1238,6 +1255,8 @@ const CivilizationMetroMap = () => {
               lineConfig={LINES.Empire}
               animationProgress={animationProgress}
               isVisible={visibleLines.empire}
+              isNarrativeFocus={narrativeFocusLine === 'empire'}
+              isCrisisMode={false}
             />
 
             <MetroLine
@@ -1246,7 +1265,8 @@ const CivilizationMetroMap = () => {
               lineConfig={LINES.Population}
               animationProgress={animationProgress}
               isVisible={visibleLines.population}
-              filterId="glow-green"
+              isNarrativeFocus={narrativeFocusLine === 'population'}
+              isCrisisMode={false}
             />
 
             <MetroLine
@@ -1254,7 +1274,8 @@ const CivilizationMetroMap = () => {
               lineConfig={LINES.War}
               animationProgress={animationProgress}
               isVisible={visibleLines.war}
-              filterId="glitch-war"
+              isNarrativeFocus={narrativeFocusLine === 'war'}
+              isCrisisMode={true} // War line always has crisis mode for visual impact
             />
 
             <MetroLine
@@ -1262,7 +1283,8 @@ const CivilizationMetroMap = () => {
               lineConfig={LINES.Tech}
               animationProgress={animationProgress}
               isVisible={visibleLines.tech}
-              filterId="glow-blue"
+              isNarrativeFocus={narrativeFocusLine === 'tech'}
+              isCrisisMode={false}
             />
 
             {/* PROPER METRO MAP: Render each station ON ITS LINE(S) at the line's Y position */}
@@ -1291,6 +1313,11 @@ const CivilizationMetroMap = () => {
               const visibleStationLines = s.lines.filter(line => visibleLines[lineMap[line]] !== false);
               if (visibleStationLines.length === 0 && !isSearchMatch) return null;
               
+              // LOD: At very low zoom, only show major stations (hubs, crisis, or in journey)
+              const isTooSmall = currentZoom < 0.2;
+              const shouldRenderStation = !isTooSmall || s.significance === 'hub' || s.significance === 'crisis' || isInJourney || isSearchMatch;
+              if (!shouldRenderStation) return null;
+              
               // Render a marker on EACH line this station belongs to
               return (
                 <g key={s.id}>
@@ -1309,14 +1336,19 @@ const CivilizationMetroMap = () => {
                     />
                   )}
                   
-                  {/* Station marker on each line */}
+                  {/* Station marker on each line - LOD aware */}
                   {visibleStationLines.map((line, idx) => {
                     const lineY = lineYPositions[line];
                     const lineColor = colors[line];
                     const isPrimaryLine = idx === 0;
-                    const radius = isActive ? 20 : 15;
+                    
+                    // LOD: Adjust radius based on zoom level
+                    const baseRadius = isActive ? 20 : 15;
+                    const radius = currentZoom < 0.2 ? baseRadius * 0.5 : baseRadius;
+                    
                     const isCrisis = s.significance === 'crisis';
                     const isSingularity = s.id === 'singularity';
+                    const isDetailView = currentZoom > 0.6; // Define here for use in this scope
                     
                     return (
                       <g
@@ -1369,7 +1401,7 @@ const CivilizationMetroMap = () => {
                           </circle>
                         )}
                         
-                        {/* Outer ring - with glitch filter for crisis stations */}
+                        {/* Outer ring - with CSS glitch class for crisis stations (replaces SVG filter) */}
                         <circle
                           cx={s.coords.x}
                           cy={lineY}
@@ -1377,17 +1409,19 @@ const CivilizationMetroMap = () => {
                           fill="#0a0a0a"
                           stroke={lineColor}
                           strokeWidth={isActive ? 6 : 4}
-                          filter={isCrisis ? "url(#glitch)" : undefined}
+                          className={isCrisis ? "crisis-active" : ""}
                         />
                         
-                        {/* Inner dot */}
-                        <circle
-                          cx={s.coords.x}
-                          cy={lineY}
-                          r={isActive ? 8 : 6}
-                          fill={lineColor}
-                          filter={isCrisis ? "url(#glitch)" : undefined}
-                        />
+                        {/* Inner dot - only render if zoomed in or active (LOD) */}
+                        {(isDetailView || isActive) && (
+                          <circle
+                            cx={s.coords.x}
+                            cy={lineY}
+                            r={isActive ? 8 : 6}
+                            fill={lineColor}
+                            className={isCrisis ? "crisis-active" : ""}
+                          />
+                        )}
                         
                         {/* Singularity: Radiating particles */}
                         {isSingularity && isPrimaryLine && (
@@ -1434,11 +1468,12 @@ const CivilizationMetroMap = () => {
                     );
                   })}
                   
-                  {/* Label - only show once, above the topmost marker */}
-                  {shouldShowLabel && (
+                  {/* Label - LOD aware: only show if zoomed in enough or active */}
+                  {shouldShowLabel && (currentZoom > 0.6 || isActive) && (
                     <g className="pointer-events-none select-none">
                       {(() => {
                         const topY = Math.min(...visibleStationLines.map(l => lineYPositions[l]));
+                        const isDetailView = currentZoom > 0.6; // Re-define in this closure scope
                         return (
                           <>
                             {/* Name label background */}
@@ -1454,6 +1489,7 @@ const CivilizationMetroMap = () => {
                               strokeWidth={6}
                               strokeLinejoin="round"
                               opacity={0.5}
+                              className="station-label"
                             >
                               {s.name.length > 25 ? `${s.name.substring(0, 25)}…` : s.name}
                             </text>
@@ -1466,21 +1502,24 @@ const CivilizationMetroMap = () => {
                               fontSize={isActive ? 28 : 24}
                               fontFamily="'JetBrains Mono', monospace"
                               fontWeight="700"
+                              className="station-label"
                             >
                               {s.name.length > 25 ? `${s.name.substring(0, 25)}…` : s.name}
                             </text>
-                            {/* Year label */}
-                            <text
-                              x={s.coords.x}
-                              y={topY - 6}
-                              textAnchor="middle"
-                              fill={colors[visibleStationLines[0]]}
-                              fontSize={20}
-                              fontFamily="'JetBrains Mono', monospace"
-                              fontWeight="600"
-                            >
-                              {s.yearLabel}
-                            </text>
+                            {/* Year label - Only show if very zoomed in or active (LOD) */}
+                            {(isActive || currentZoom > 1.2) && (
+                              <text
+                                x={s.coords.x}
+                                y={topY - 6}
+                                textAnchor="middle"
+                                fill={colors[visibleStationLines[0]]}
+                                fontSize={20}
+                                fontFamily="'JetBrains Mono', monospace"
+                                fontWeight="600"
+                              >
+                                {s.yearLabel}
+                              </text>
+                            )}
                           </>
                         );
                       })()}
