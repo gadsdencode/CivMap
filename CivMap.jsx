@@ -7,6 +7,9 @@ import { useAccessibility, useFocusManagement } from './hooks/useAccessibility';
 import { usePerformance, useDebounce, useThrottle } from './hooks/usePerformance';
 import { LoadingOverlay, LoadingSpinner } from './components/Loading';
 import AccessibleButton from './components/AccessibleButton';
+import { MetroLine, Station } from './src/components/metro';
+import { generateSmoothPath } from './src/utils/pathGenerator';
+import { LINES } from './src/constants/metroConfig';
 
 const CivilizationMetroMap = () => {
   // --- Performance Monitoring ---
@@ -1014,129 +1017,6 @@ const CivilizationMetroMap = () => {
     return station;
   }), []);
 
-  // Enhanced path generators with better curves
-  // Enhanced path generation that ensures paths pass THROUGH stations
-  // Human-Centric: Paths must visibly go through station centers
-  const generateSmoothPath = (points) => {
-    if (points.length < 2) return "";
-    let d = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 1; i < points.length; i++) {
-      const prev = points[i - 1];
-      const curr = points[i];
-      const next = points[i + 1] || curr;
-      
-      // Calculate direction vectors for smooth curves
-      const dx1 = curr.x - prev.x;
-      const dy1 = curr.y - prev.y;
-      const dx2 = (next.x - curr.x) || dx1;
-      const dy2 = (next.y - curr.y) || dy1;
-      
-      // Control points that ensure the curve passes through the station
-      // Using tighter control to make the path visibly go through the point
-      const cp1x = prev.x + dx1 * 0.3;
-      const cp1y = prev.y + dy1 * 0.3;
-      const cp2x = curr.x - dx2 * 0.15;
-      const cp2y = curr.y - dy2 * 0.15;
-      
-      // Explicitly pass through the current point (station center)
-      d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${curr.x} ${curr.y}`;
-    }
-    return d;
-  };
-  
-  // Generate explicit station connection segments
-  // These create visible "tracks" that stations sit on
-  const generateStationConnections = (points, stationIds, allStations) => {
-    const connections = [];
-    points.forEach((point, idx) => {
-      // Find if this point corresponds to a station
-      const station = allStations.find(s => 
-        Math.abs(s.coords.x - point.x) < 5 && Math.abs(s.coords.y - point.y) < 5
-      );
-      
-      if (station && idx > 0 && idx < points.length - 1) {
-        const prev = points[idx - 1];
-        const next = points[idx + 1];
-        
-        // Create explicit connection segments entering and leaving the station
-        // This makes it visually clear the path goes THROUGH the station
-        const angleIn = Math.atan2(station.coords.y - prev.y, station.coords.x - prev.x);
-        const angleOut = Math.atan2(next.y - station.coords.y, next.x - station.coords.x);
-        
-        const radius = 40; // Distance from station center for connection points
-        
-        connections.push({
-          stationId: station.id,
-          enterX: station.coords.x - Math.cos(angleIn) * radius,
-          enterY: station.coords.y - Math.sin(angleIn) * radius,
-          centerX: station.coords.x,
-          centerY: station.coords.y,
-          exitX: station.coords.x + Math.cos(angleOut) * radius,
-          exitY: station.coords.y + Math.sin(angleOut) * radius,
-          station: station
-        });
-      }
-    });
-    return connections;
-  };
-
-  // Rocket trajectory for Blue line near the end (vertical ascent)
-  const generateRocketPath = (points) => {
-    if (points.length < 2) return "";
-    let d = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 1; i < points.length; i++) {
-      const prev = points[i - 1];
-      const curr = points[i];
-      
-      // Early points: smooth curve
-      if (i < points.length - 2) {
-        const cp1x = prev.x + (curr.x - prev.x) * 0.5;
-        const cp1y = prev.y;
-        const cp2x = curr.x - (curr.x - prev.x) * 0.1;
-        const cp2y = curr.y;
-        d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${curr.x} ${curr.y}`;
-      } else {
-        // Last segment: near-vertical rocket trajectory
-        const midX = (prev.x + curr.x) / 2;
-        d += ` Q ${midX} ${prev.y}, ${curr.x} ${curr.y}`;
-      }
-    }
-    return d;
-  };
-
-  // Sharp angular path for War line - deterministic tension pattern
-  const generateJaggedPath = (points) => {
-    if (points.length < 2) return "";
-    let d = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 1; i < points.length; i++) {
-      const prev = points[i - 1];
-      const curr = points[i];
-      // Create angular tension with deterministic zigzag pattern
-      const midX = (prev.x + curr.x) / 2;
-      const midY = (prev.y + curr.y) / 2;
-      // Offset the midpoint for visual tension
-      const offset = (i % 2 === 0) ? 25 : -25;
-      d += ` L ${midX} ${midY + offset} L ${curr.x} ${curr.y}`;
-    }
-    return d;
-  };
-
-  // Stepped path for Empire line - clean metro-style with gentle steps
-  const generateBlockyPath = (points) => {
-    if (points.length < 2) return "";
-    let d = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 1; i < points.length; i++) {
-      const prev = points[i - 1];
-      const curr = points[i];
-      // Smooth S-curve connections instead of harsh 90-degree turns
-      const midX = (prev.x + curr.x) / 2;
-      const cp1x = prev.x + (curr.x - prev.x) * 0.4;
-      const cp2x = curr.x - (curr.x - prev.x) * 0.4;
-      d += ` C ${cp1x} ${prev.y}, ${cp2x} ${curr.y}, ${curr.x} ${curr.y}`;
-    }
-    return d;
-  };
-
   // Braided trunk for Green line (multiple overlapping paths)
   // Scaled for larger viewport
   // IMPORTANT: Main path passes through stations, braids are visual effect only
@@ -2045,253 +1925,44 @@ const CivilizationMetroMap = () => {
               </text>
             </g>
 
-            {/* 1. Orange Philosophy Line - Clean metro style */}
-            {visibleLines.philosophy && (
-              <>
-                {/* Background glow - subtle */}
-                <path 
-                  d={paths.orange} 
-                  fill="none" 
-                  stroke="#fbbf24" 
-                  strokeWidth="35" 
-                  strokeOpacity="0.25" 
-                  strokeLinecap="round"
-                  style={{
-                    strokeDasharray: 10000,
-                    strokeDashoffset: 10000 * (1 - animationProgress),
-                    transition: 'stroke-dashoffset 0.1s linear',
-                    opacity: visibleLines.philosophy ? 1 : 0.3
-                  }}
-                />
-                {/* Main philosophy line */}
-                <path 
-                  d={paths.orange} 
-                  fill="none" 
-                  stroke="#f59e0b" 
-                  strokeWidth="18" 
-                  strokeOpacity="0.9" 
-                  strokeLinecap="round"
-                  style={{
-                    strokeDasharray: 10000,
-                    strokeDashoffset: 10000 * (1 - animationProgress),
-                    transition: 'stroke-dashoffset 0.1s linear',
-                    opacity: visibleLines.philosophy ? 1 : 0.3
-                  }}
-                />
-                {/* Bright core */}
-                <path 
-                  d={paths.orange} 
-                  fill="none" 
-                  stroke="#fbbf24" 
-                  strokeWidth="6" 
-                  strokeOpacity="0.8" 
-                  strokeLinecap="round"
-                  style={{
-                    strokeDasharray: 10000,
-                    strokeDashoffset: 10000 * (1 - animationProgress),
-                    transition: 'stroke-dashoffset 0.1s linear',
-                    opacity: visibleLines.philosophy ? 1 : 0.3
-                  }}
-                />
-              </>
-            )}
+            {/* Metro Lines - Using MetroLine Component */}
+            <MetroLine
+              pathData={paths.orange}
+              lineConfig={LINES.Philosophy}
+              animationProgress={animationProgress}
+              isVisible={visibleLines.philosophy}
+            />
             
-            {/* 2. Purple Empire - Clean regal metro style */}
-            {visibleLines.empire && (
-              <>
-                {/* Background shadow */}
-                <path 
-                  d={paths.purple} 
-                  fill="none" 
-                  stroke="#4c1d95" 
-                  strokeWidth="30" 
-                  strokeLinecap="round"
-                  style={{
-                    strokeDasharray: 10000,
-                    strokeDashoffset: 10000 * (1 - animationProgress),
-                    transition: 'stroke-dashoffset 0.1s linear',
-                    opacity: visibleLines.empire ? 0.5 : 0.15
-                  }}
-                />
-                {/* Main purple line */}
-                <path 
-                  d={paths.purple} 
-                  fill="none" 
-                  stroke="#7c3aed" 
-                  strokeWidth="18" 
-                  strokeLinecap="round"
-                  style={{
-                    strokeDasharray: 10000,
-                    strokeDashoffset: 10000 * (1 - animationProgress),
-                    transition: 'stroke-dashoffset 0.1s linear',
-                    opacity: visibleLines.empire ? 1 : 0.3
-                  }}
-                />
-                {/* Bright core */}
-                <path 
-                  d={paths.purple} 
-                  fill="none" 
-                  stroke="#a855f7" 
-                  strokeWidth="8" 
-                  strokeLinecap="round"
-                  style={{
-                    strokeDasharray: 10000,
-                    strokeDashoffset: 10000 * (1 - animationProgress),
-                    transition: 'stroke-dashoffset 0.1s linear',
-                    opacity: visibleLines.empire ? 0.9 : 0.25
-                  }}
-                />
-              </>
-            )}
+            <MetroLine
+              pathData={paths.purple}
+              lineConfig={LINES.Empire}
+              animationProgress={animationProgress}
+              isVisible={visibleLines.empire}
+            />
 
-            {/* 3. Green Population - Clean metro style with subtle depth */}
-            {visibleLines.population && (
-              <>
-                {/* Background shadow for depth */}
-                <path 
-                  d={paths.green.main} 
-                  fill="none" 
-                  stroke="#14532d" 
-                  strokeWidth="32" 
-                  strokeLinecap="round" 
-                  opacity="0.5"
-                  style={{
-                    strokeDasharray: 10000,
-                    strokeDashoffset: 10000 * (1 - animationProgress),
-                    transition: 'stroke-dashoffset 0.1s linear'
-                  }}
-                />
-                {/* Main path */}
-                <path 
-                  d={paths.green.main} 
-                  fill="none" 
-                  stroke="#16a34a" 
-                  strokeWidth="22" 
-                  strokeLinecap="round" 
-                  opacity="1"
-                  style={{
-                    strokeDasharray: 10000,
-                    strokeDashoffset: 10000 * (1 - animationProgress),
-                    transition: 'stroke-dashoffset 0.1s linear'
-                  }}
-                />
-                {/* Bright core highlight */}
-                <path 
-                  d={paths.green.main} 
-                  fill="none" 
-                  stroke="#22c55e" 
-                  strokeWidth="8" 
-                  strokeLinecap="round"
-                  filter="url(#glow-green)"
-                  style={{
-                    strokeDasharray: 10000,
-                    strokeDashoffset: 10000 * (1 - animationProgress),
-                    transition: 'stroke-dashoffset 0.1s linear'
-                  }}
-                />
-              </>
-            )}
+            <MetroLine
+              pathData={paths.green.main}
+              lineConfig={LINES.Population}
+              animationProgress={animationProgress}
+              isVisible={visibleLines.population}
+              filterId="glow-green"
+            />
 
-            {/* 4. Red War - Clean angular metro style */}
-            {visibleLines.war && (
-              <>
-                {/* Background shadow */}
-                <path 
-                  d={paths.red} 
-                  fill="none" 
-                  stroke="#7f1d1d" 
-                  strokeWidth="24" 
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  style={{
-                    strokeDasharray: 10000,
-                    strokeDashoffset: 10000 * (1 - animationProgress),
-                    transition: 'stroke-dashoffset 0.1s linear',
-                    opacity: visibleLines.war ? 0.6 : 0.2
-                  }}
-                />
-                {/* Main red line */}
-                <path 
-                  d={paths.red} 
-                  fill="none" 
-                  stroke="#dc2626" 
-                  strokeWidth="14" 
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  style={{
-                    strokeDasharray: 10000,
-                    strokeDashoffset: 10000 * (1 - animationProgress),
-                    transition: 'stroke-dashoffset 0.1s linear',
-                    opacity: visibleLines.war ? 1 : 0.3
-                  }}
-                />
-                {/* Bright core */}
-                <path 
-                  d={paths.red} 
-                  fill="none" 
-                  stroke="#ef4444" 
-                  strokeWidth="6" 
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  filter="url(#glow-red)"
-                  style={{
-                    strokeDasharray: 10000,
-                    strokeDashoffset: 10000 * (1 - animationProgress),
-                    transition: 'stroke-dashoffset 0.1s linear',
-                    opacity: visibleLines.war ? 0.9 : 0.2
-                  }}
-                />
-              </>
-            )}
+            <MetroLine
+              pathData={paths.red}
+              lineConfig={LINES.War}
+              animationProgress={animationProgress}
+              isVisible={visibleLines.war}
+              filterId="glow-red"
+            />
 
-            {/* 5. Blue Tech - Clean futuristic metro style */}
-            {visibleLines.tech && (
-              <>
-                {/* Background shadow */}
-                <path 
-                  d={paths.blue} 
-                  fill="none" 
-                  stroke="#0e7490" 
-                  strokeWidth="28" 
-                  strokeLinecap="round"
-                  style={{
-                    strokeDasharray: 10000,
-                    strokeDashoffset: 10000 * (1 - animationProgress),
-                    transition: 'stroke-dashoffset 0.1s linear',
-                    opacity: visibleLines.tech ? 0.5 : 0.15
-                  }}
-                />
-                {/* Main cyan line */}
-                <path 
-                  d={paths.blue} 
-                  fill="none" 
-                  stroke="#0891b2" 
-                  strokeWidth="18" 
-                  strokeLinecap="round"
-                  style={{
-                    strokeDasharray: 10000,
-                    strokeDashoffset: 10000 * (1 - animationProgress),
-                    transition: 'stroke-dashoffset 0.1s linear',
-                    opacity: visibleLines.tech ? 1 : 0.3
-                  }}
-                />
-                {/* Bright core with glow */}
-                <path 
-                  d={paths.blue} 
-                  fill="none" 
-                  stroke="#22d3ee" 
-                  strokeWidth="8" 
-                  strokeLinecap="round"
-                  filter="url(#glow-blue)"
-                  style={{
-                    strokeDasharray: 10000,
-                    strokeDashoffset: 10000 * (1 - animationProgress),
-                    transition: 'stroke-dashoffset 0.1s linear',
-                    opacity: visibleLines.tech ? 1 : 0.3
-                  }}
-                />
-              </>
-            )}
+            <MetroLine
+              pathData={paths.blue}
+              lineConfig={LINES.Tech}
+              animationProgress={animationProgress}
+              isVisible={visibleLines.tech}
+              filterId="glow-blue"
+            />
 
             {/* Explicit Path-to-Station Connections - Visual Cohesion */}
             {/* These ensure stations visually connect to their paths */}
@@ -2348,270 +2019,33 @@ const CivilizationMetroMap = () => {
               });
             })}
 
-            {/* Stations - Human-Centric: Progressive Disclosure, Connected to Paths */}
+            {/* Stations - Using Station Component */}
             {filteredStations.map((s) => {
               const isHovered = hoveredStation === s.id;
               const isSelected = selectedStation?.id === s.id;
               const isInJourney = journeyMode && journeyStations[journeyIndex] === s.id;
               const isSearchMatch = searchQuery && (s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.yearLabel.toLowerCase().includes(searchQuery.toLowerCase()));
               const shouldShowLabel = showAllLabels || isHovered || isSelected || isInJourney || isSearchMatch;
-              const scale = isHovered || isSelected || isInJourney ? 1.4 : isSearchMatch ? 1.2 : 1;
-              
-              // Determine visibility based on line filters
-              const isVisible = s.lines.some(line => {
-                const lineMap = {
-                  'Tech': 'tech',
-                  'Population': 'population',
-                  'War': 'war',
-                  'Empire': 'empire',
-                  'Philosophy': 'philosophy'
-                };
-                return visibleLines[lineMap[line]] !== false;
-              });
-              
-              if (!isVisible && !isSearchMatch) return null;
               
               return (
-                <g 
+                <Station
                   key={s.id}
-                  onMouseEnter={() => setHoveredStation(s.id)}
-                  onMouseLeave={() => setHoveredStation(null)}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedStation(s);
+                  station={s}
+                  isHovered={isHovered}
+                  isSelected={isSelected}
+                  isInJourney={isInJourney}
+                  isSearchMatch={isSearchMatch}
+                  showLabel={shouldShowLabel}
+                  onHover={setHoveredStation}
+                  onSelect={(station) => {
+                    setSelectedStation(station);
                     if (journeyMode) {
-                      const idx = journeyStations.indexOf(s.id);
+                      const idx = journeyStations.indexOf(station.id);
                       if (idx !== -1) setJourneyIndex(idx);
                     }
                   }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  className="cursor-pointer transition-all duration-300"
-                  style={{ 
-                    transformOrigin: `${s.coords.x}px ${s.coords.y}px`,
-                    transform: `scale(${scale})`,
-                    opacity: isVisible ? 1 : 0.4
-                  }}
-                >
-                  {/* Path Connection Indicator - Subtle glow showing connection to paths */}
-                  {(isHovered || isSelected) && s.lines.map((line, idx) => {
-                    const lineColors = {
-                      'Tech': '#22d3ee',
-                      'Population': '#22c55e',
-                      'War': '#ef4444',
-                      'Empire': '#9333ea',
-                      'Philosophy': '#fbbf24'
-                    };
-                    const lineColor = lineColors[line] || s.color;
-                    const angle = (idx * 360) / s.lines.length;
-                    const radius = 50;
-                    const x2 = s.coords.x + Math.cos(angle * Math.PI / 180) * radius;
-                    const y2 = s.coords.y + Math.sin(angle * Math.PI / 180) * radius;
-                    
-                    return (
-                      <line
-                        key={`connection-${line}`}
-                        x1={s.coords.x}
-                        y1={s.coords.y}
-                        x2={x2}
-                        y2={y2}
-                        stroke={lineColor}
-                        strokeWidth="4"
-                        strokeOpacity="0.4"
-                        strokeLinecap="round"
-                        className="animate-pulse"
-                      />
-                    );
-                  })}
-
-                  {/* Journey Mode Highlight */}
-                  {isInJourney && (
-                    <circle 
-                      cx={s.coords.x} 
-                      cy={s.coords.y} 
-                      r="120" 
-                      fill="none" 
-                      stroke="#22d3ee" 
-                      strokeWidth="8"
-                      strokeDasharray="20,10"
-                      opacity="0.6"
-                      className="animate-pulse"
-                    />
-                  )}
-                  
-                  {/* Search Match Highlight */}
-                  {isSearchMatch && !isSelected && (
-                    <circle 
-                      cx={s.coords.x} 
-                      cy={s.coords.y} 
-                      r="100" 
-                      fill="none" 
-                      stroke="#fbbf24" 
-                      strokeWidth="6"
-                      opacity="0.5"
-                    />
-                  )}
-
-                  {/* Visual Track Platform - Human-Centric: Station sits ON the track */}
-                  {/* This creates the visual impression that the station is integrated into the path */}
-                  {s.lines.map((line) => {
-                    const lineColors = {
-                      'Tech': '#22d3ee',
-                      'Population': '#22c55e',
-                      'War': '#ef4444',
-                      'Empire': '#9333ea',
-                      'Philosophy': '#fbbf24'
-                    };
-                    const lineColor = lineColors[line] || s.color;
-                    
-                    // Create track platform ellipse - shows station is ON the track
-                    return (
-                      <ellipse
-                        key={`track-platform-${line}`}
-                        cx={s.coords.x}
-                        cy={s.coords.y}
-                        rx="50"
-                        ry="30"
-                        fill="none"
-                        stroke={lineColor}
-                        strokeWidth="8"
-                        strokeOpacity="0.25"
-                        transform={`rotate(${s.lines.indexOf(line) * 45} ${s.coords.x} ${s.coords.y})`}
-                        className="pointer-events-none"
-                      />
-                    );
-                  })}
-                  
-                  {/* Station Base Glow - Connected to paths visually */}
-                  <circle 
-                    cx={s.coords.x} 
-                    cy={s.coords.y} 
-                    r={isHovered || isSelected || isInJourney ? 90 : 0} 
-                    fill={s.color} 
-                    fillOpacity="0.15"
-                    className="transition-all duration-300"
-                    filter="url(#glow-blue)"
-                  />
-                  
-                  {/* Outer Ring - Station marker, clearly ON the track */}
-                  <circle 
-                    cx={s.coords.x} 
-                    cy={s.coords.y} 
-                    r={isSelected || isInJourney ? "35" : "30"} 
-                    fill="#000" 
-                    stroke={s.color} 
-                    strokeWidth={isSelected || isInJourney ? "12" : "10"}
-                    opacity="0.95"
-                  />
-                  
-                  {/* Path Connection Indicators - Show which lines pass through this station */}
-                  {s.lines.map((line, idx) => {
-                    const lineColors = {
-                      'Tech': '#22d3ee',
-                      'Population': '#22c55e',
-                      'War': '#ef4444',
-                      'Empire': '#9333ea',
-                      'Philosophy': '#fbbf24'
-                    };
-                    const lineColor = lineColors[line] || s.color;
-                    const angle = (idx * 360) / s.lines.length;
-                    const radius = isSelected || isInJourney ? 42 : 37;
-                    const x = s.coords.x + Math.cos(angle * Math.PI / 180) * radius;
-                    const y = s.coords.y + Math.sin(angle * Math.PI / 180) * radius;
-                    
-                    return (
-                      <g key={`line-indicator-${line}`}>
-                        {/* Connection dot - Shows this line passes through */}
-                        <circle
-                          cx={x}
-                          cy={y}
-                          r="8"
-                          fill={lineColor}
-                          opacity="0.9"
-                          filter="url(#glow-blue)"
-                        />
-                        {/* Connection line - Visual link to path */}
-                        <line
-                          x1={s.coords.x}
-                          y1={s.coords.y}
-                          x2={x}
-                          y2={y}
-                          stroke={lineColor}
-                          strokeWidth="3"
-                          strokeOpacity="0.5"
-                          strokeLinecap="round"
-                        />
-                      </g>
-                    );
-                  })}
-                  
-                  {/* Middle Ring - Station structure */}
-                  <circle 
-                    cx={s.coords.x} 
-                    cy={s.coords.y} 
-                    r="20" 
-                    fill="none" 
-                    stroke={s.color} 
-                    strokeWidth="5"
-                    opacity="0.7"
-                  />
-                  
-                  {/* Inner Core - Station center, clearly ON the track */}
-                  <circle 
-                    cx={s.coords.x} 
-                    cy={s.coords.y} 
-                    r={isSelected || isInJourney ? "14" : "12"} 
-                    fill={s.color}
-                    filter="url(#glow-blue)"
-                  />
-                  
-                  {/* Track Integration Glow - Shows station is integrated into path */}
-                  {(isHovered || isSelected) && (
-                    <circle
-                      cx={s.coords.x}
-                      cy={s.coords.y}
-                      r="60"
-                      fill="none"
-                      stroke={s.color}
-                      strokeWidth="8"
-                      strokeOpacity="0.2"
-                      className="animate-pulse"
-                    />
-                  )}
-
-                  {/* Station Name Label - Progressive Disclosure */}
-                  {shouldShowLabel && (
-                    <text 
-                      x={s.coords.x} 
-                      y={s.coords.y - 50} 
-                      textAnchor="middle" 
-                      fill="white" 
-                      fillOpacity={isHovered || isSelected || isInJourney ? 1 : 0.8}
-                      fontSize={isSelected || isInJourney ? "32" : "28"}
-                      fontFamily="monospace"
-                      fontWeight="bold"
-                      className="pointer-events-none select-none drop-shadow-lg"
-                    >
-                      {s.name.length > 30 ? s.name.substring(0, 30) + '...' : s.name}
-                    </text>
-                  )}
-
-                  {/* Year Label - Progressive Disclosure */}
-                  {shouldShowLabel && (
-                    <text 
-                      x={s.coords.x} 
-                      y={s.coords.y + 90} 
-                      textAnchor="middle" 
-                      fill={s.color} 
-                      fillOpacity={isHovered || isSelected || isInJourney ? 1 : 0.8}
-                      fontSize={isSelected || isInJourney ? "26" : "24"}
-                      fontFamily="monospace"
-                      fontWeight="bold"
-                      className="pointer-events-none select-none drop-shadow-md"
-                    >
-                      {s.yearLabel}
-                    </text>
-                  )}
-                </g>
+                  visibleLines={visibleLines}
+                />
               );
             })}
           </svg>
@@ -2649,7 +2083,7 @@ const CivilizationMetroMap = () => {
                 <rect width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} fill="url(#minimapGrid)" />
                 
                 {/* Minimap lines (simplified, thicker for visibility) */}
-                {visibleLines.blue && (
+                {visibleLines.tech && (
                   <path d={paths.blue} fill="none" stroke="#22d3ee" strokeWidth="4" opacity="0.7" />
                 )}
                 {visibleLines.population && (
