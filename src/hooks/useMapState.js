@@ -29,6 +29,7 @@ const ActionTypes = {
   TOGGLE_FILTERS: 'TOGGLE_FILTERS',
   TOGGLE_MINIMAP: 'TOGGLE_MINIMAP',
   TOGGLE_LABELS: 'TOGGLE_LABELS',
+  TOGGLE_UI: 'TOGGLE_UI',
   SET_WELCOME: 'SET_WELCOME',
   
   // Search
@@ -82,6 +83,7 @@ function createInitialState() {
     showFilters: false,
     showMinimap: true,
     showAllLabels: false,
+    showUI: true, // Toggle for hiding all UI elements for max map visibility
     
     // Search state
     searchQuery: '',
@@ -200,6 +202,9 @@ function mapReducer(state, action) {
       
     case ActionTypes.TOGGLE_LABELS:
       return { ...state, showAllLabels: !state.showAllLabels };
+    
+    case ActionTypes.TOGGLE_UI:
+      return { ...state, showUI: !state.showUI };
       
     case ActionTypes.SET_WELCOME:
       return { ...state, showWelcome: action.payload };
@@ -300,6 +305,7 @@ export function useMapState(stations = []) {
     toggleFilters: () => dispatch({ type: ActionTypes.TOGGLE_FILTERS }),
     toggleMinimap: () => dispatch({ type: ActionTypes.TOGGLE_MINIMAP }),
     toggleLabels: () => dispatch({ type: ActionTypes.TOGGLE_LABELS }),
+    toggleUI: () => dispatch({ type: ActionTypes.TOGGLE_UI }),
     setWelcome: (show) => dispatch({ type: ActionTypes.SET_WELCOME, payload: show }),
     
     // Search

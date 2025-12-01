@@ -112,6 +112,7 @@ const CivilizationMetroMap = () => {
     showFilters,
     showMinimap,
     showAllLabels,
+    showUI,
     searchQuery,
     journeyMode,
     journeyIndex,
@@ -613,18 +614,31 @@ const CivilizationMetroMap = () => {
         </div>
       )}
 
+      {/* --- UI Toggle Button (Always Visible) --- */}
+      <button
+        onClick={() => actions.toggleUI()}
+        className="absolute top-4 left-4 z-50 p-2 bg-neutral-900/90 backdrop-blur-md border border-cyan-900/50 rounded-lg text-cyan-400 hover:bg-neutral-800 hover:text-cyan-300 transition-all shadow-lg"
+        title={showUI ? "Hide UI (maximize map)" : "Show UI"}
+        aria-label={showUI ? "Hide user interface" : "Show user interface"}
+      >
+        {showUI ? <EyeOff size={20} /> : <Eye size={20} />}
+      </button>
+
       {/* --- Header --- */}
-      <header className="absolute top-0 left-0 p-6 z-20 pointer-events-none">
-        <h1 className="text-4xl font-black tracking-tighter uppercase text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]">
-          Civilization Metro Map
-        </h1>
-        <div className="flex items-center gap-2 mt-2">
-          <span className="animate-pulse w-2 h-2 rounded-full bg-green-500"></span>
-          <p className="text-xs text-cyan-300/60 uppercase tracking-widest">Full Scale Visualization • 12,025 Years • Piecewise Time Axis</p>
-        </div>
-      </header>
+      {showUI && (
+        <header className="absolute top-0 left-14 p-6 z-20 pointer-events-none">
+          <h1 className="text-4xl font-black tracking-tighter uppercase text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]">
+            Civilization Metro Map
+          </h1>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="animate-pulse w-2 h-2 rounded-full bg-green-500"></span>
+            <p className="text-xs text-cyan-300/60 uppercase tracking-widest">Full Scale Visualization • 12,025 Years • Piecewise Time Axis</p>
+          </div>
+        </header>
+      )}
 
       {/* Human-Centric Control Panel */}
+      {showUI && (
       <div className="absolute top-20 left-4 z-30 flex flex-col gap-3">
         {/* Search */}
         <div className="relative">
@@ -798,6 +812,7 @@ const CivilizationMetroMap = () => {
           <Map size={20} />
         </button>
       </div>
+      )}
 
       {/* --- Main Viewport --- */}
       <div className="flex-1 relative flex">
@@ -824,6 +839,7 @@ const CivilizationMetroMap = () => {
           <div className="absolute inset-0 z-0 pointer-events-none opacity-10 bg-[url('https://grainy-gradients.vercel.app/noise.svg')]"></div>
           
           {/* Zoom Controls */}
+          {showUI && (
           <div className="absolute top-4 right-4 z-30 flex flex-col gap-2 bg-neutral-900/90 backdrop-blur-md border border-cyan-900/50 rounded-lg p-2 shadow-2xl">
             <button
               onClick={zoomIn}
@@ -862,6 +878,7 @@ const CivilizationMetroMap = () => {
               {Math.round((viewBox.width / VIEWBOX_WIDTH) * 100)}% view
             </div>
           </div>
+          )}
           
           <svg 
             ref={svgRef}
@@ -1159,7 +1176,7 @@ const CivilizationMetroMap = () => {
           </svg>
 
           {/* Minimap - Human-Centric Spatial Orientation */}
-          {showMinimap && (
+          {showUI && showMinimap && (
             <div className="absolute bottom-4 right-4 z-30 bg-neutral-900/95 backdrop-blur-md border border-cyan-900/50 rounded-lg p-3 shadow-2xl">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-mono text-cyan-400 uppercase tracking-widest">Overview</span>
@@ -1484,13 +1501,15 @@ const CivilizationMetroMap = () => {
       </div>
 
       {/* --- Legend Footer --- */}
-      <footer className="h-20 bg-neutral-950 border-t border-neutral-800 flex items-center justify-center gap-8 px-4 z-20 shrink-0 overflow-x-auto">
-        <LegendItem color="bg-cyan-400" label="Tech" glow="shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
-        <LegendItem color="bg-green-600" label="Population" glow="shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-        <LegendItem color="bg-red-500 animate-pulse" label="War" glow="shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
-        <LegendItem color="bg-purple-600" label="Empire" glow="shadow-[0_0_8px_rgba(147,51,234,0.6)]" />
-        <LegendItem color="bg-amber-500 blur-[1px]" label="Philosophy" glow="shadow-[0_0_8px_rgba(251,191,36,0.4)]" />
-      </footer>
+      {showUI && (
+        <footer className="h-20 bg-neutral-950 border-t border-neutral-800 flex items-center justify-center gap-8 px-4 z-20 shrink-0 overflow-x-auto">
+          <LegendItem color="bg-cyan-400" label="Tech" glow="shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+          <LegendItem color="bg-green-600" label="Population" glow="shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+          <LegendItem color="bg-red-500 animate-pulse" label="War" glow="shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
+          <LegendItem color="bg-purple-600" label="Empire" glow="shadow-[0_0_8px_rgba(147,51,234,0.6)]" />
+          <LegendItem color="bg-amber-500 blur-[1px]" label="Philosophy" glow="shadow-[0_0_8px_rgba(251,191,36,0.4)]" />
+        </footer>
+      )}
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
