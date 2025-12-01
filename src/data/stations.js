@@ -945,18 +945,13 @@ const LINE_COLOR_MAP = {
 };
 
 /**
- * Collision detection threshold - stations within this pixel distance are considered overlapping
- * INCREASED to 150 for visual breathing room (>= station diameter * 3)
- * This prevents visual crowding and allows lines space to curve smoothly
+ * Minimum X distance between station CENTERS on the same line.
+ * Station markers are ~30-40px diameter. With hover effects and labels,
+ * we need VERY generous spacing. VIEWBOX is 8000px wide, plenty of room.
+ * 
+ * MUST NEVER OVERLAP: Using 300px ensures clear separation even at low zoom.
  */
-const COLLISION_THRESHOLD = 150; // pixels - generous spacing prevents crowding
-
-/**
- * Horizontal offset amount to apply when stations overlap
- * INCREASED to 180 to reduce curve steepness when stations are pushed apart
- * Larger offsets = shallower approach angles = cleaner metro aesthetic
- */
-const COLLISION_OFFSET_X = 180; // pixels to offset horizontally (keeps stations on their lines)
+const MIN_STATION_GAP = 300; // Minimum pixels between station centers on same line
 
 /**
  * Process raw station data into fully computed station objects
@@ -991,77 +986,70 @@ export function processStations() {
 }
 
 /**
- * Detect overlapping stations and apply HORIZONTAL offsets to separate them
- * Stations stay on their line's Y position - only X is adjusted
+ * Detect overlapping stations and apply HORIZONTAL offsets to separate them.
+ * LINE-AWARE: For each line, ensures stations maintain MIN_STATION_GAP spacing.
+ * Uses multiple passes across ALL lines to handle multi-line station cascading.
  * @param {Array} stations - Array of stations with initial coordinates
  * @returns {Array} Stations with adjusted X coordinates to prevent overlap
  */
 function resolveStationCollisions(stations) {
-  // Sort by X coordinate (chronological order) then by Y for consistent processing
-  const sortedStations = [...stations].sort((a, b) => {
-    if (Math.abs(a.coords.x - b.coords.x) < 1) {
-      return a.coords.y - b.coords.y; // Same X, sort by Y
-    }
-    return a.coords.x - b.coords.x;
-  });
+  // Create a mutable copy with original X stored
+  const mutableStations = stations.map(s => ({
+    ...s,
+    originalX: s.coords.x,
+    adjustedX: s.coords.x
+  }));
   
-  // Track all placed stations with their final positions
-  const placedStations = [];
+  // Build a lookup by station ID for quick access
+  const stationById = {};
+  mutableStations.forEach(s => { stationById[s.id] = s; });
   
-  return sortedStations.map(station => {
-    let x = station.coords.x;
-    const y = station.coords.y; // Y stays fixed - station must be on its line!
+  const lines = ['Tech', 'War', 'Population', 'Philosophy', 'Empire'];
+  
+  // Multiple global passes to handle multi-line station cascading
+  // A station on Tech+Philosophy might need adjustment on both lines
+  for (let globalPass = 0; globalPass < 20; globalPass++) {
+    let anyChanged = false;
     
-    // Check for collisions with already-placed stations
-    let collisionFound = true;
-    let attempts = 0;
-    const maxAttempts = 20;
-    let offsetDirection = 1; // Alternate left/right
-    let offsetMultiplier = 0;
-    const originalX = x;
-    
-    while (collisionFound && attempts < maxAttempts) {
-      collisionFound = false;
+    lines.forEach(line => {
+      // Get all stations on this line, sorted by current adjustedX
+      const lineStations = mutableStations
+        .filter(s => s.lines.includes(line))
+        .sort((a, b) => a.adjustedX - b.adjustedX);
       
-      for (const placed of placedStations) {
-        const xDist = Math.abs(x - placed.x);
-        const yDist = Math.abs(y - placed.y);
+      if (lineStations.length < 2) return;
+      
+      // Check each adjacent pair
+      for (let i = 1; i < lineStations.length; i++) {
+        const prev = lineStations[i - 1];
+        const curr = lineStations[i];
+        const gap = curr.adjustedX - prev.adjustedX;
         
-        // Check if positions are too close (collision)
-        // Only collide if both X AND Y are close (same area of the map)
-        if (xDist < COLLISION_THRESHOLD && yDist < COLLISION_THRESHOLD) {
-          collisionFound = true;
-          break;
+        if (gap < MIN_STATION_GAP) {
+          // Push current station (and all after it) right to maintain gap
+          const needed = MIN_STATION_GAP - gap + 1; // +1 for safety margin
+          
+          // Push this station and cascade to all subsequent stations on this line
+          for (let j = i; j < lineStations.length; j++) {
+            lineStations[j].adjustedX += needed;
+          }
+          anyChanged = true;
         }
       }
-      
-      if (collisionFound) {
-        // Apply HORIZONTAL offset in alternating directions (left/right)
-        offsetMultiplier++;
-        x = originalX + (COLLISION_OFFSET_X * offsetMultiplier * offsetDirection);
-        offsetDirection *= -1; // Flip direction for next attempt
-        
-        // Constrain X to viewbox bounds
-        x = Math.max(50, Math.min(VIEWBOX.WIDTH - 50, x));
-      }
-      
-      attempts++;
-    }
+    });
     
-    // Record this station's final position
-    placedStations.push({ x, y, id: station.id });
-    
-    // Return station with adjusted X coordinate (Y unchanged - stays on line!)
-    return {
-      ...station,
-      coords: {
-        x: x,
-        y: y // Y is NEVER modified - station stays on its line
-      },
-      // Track if this station was offset (useful for UI hints)
-      wasOffset: Math.abs(x - originalX) > 1
-    };
-  });
+    if (!anyChanged) break; // All lines converged
+  }
+  
+  // Return stations with final adjusted X
+  return mutableStations.map(s => ({
+    ...s,
+    coords: {
+      x: Math.max(50, Math.min(VIEWBOX.WIDTH - 50, s.adjustedX)),
+      y: s.coords.y
+    },
+    wasOffset: Math.abs(s.adjustedX - s.originalX) > 1
+  }));
 }
 
 /**
