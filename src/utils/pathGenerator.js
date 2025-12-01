@@ -126,3 +126,152 @@ export function generateAllPaths(config, stationsByLine) {
   return paths;
 }
 
+/**
+ * Generate braided path for Green line (multiple overlapping paths)
+ * @param {Array<{x: number, y: number}>} points - Array of coordinate points
+ * @returns {{main: string, braid1: string, braid2: string}} Braided path variants
+ */
+export function generateBraidedPath(points) {
+  const basePath = generateSmoothPath(points);
+  // Create offset paths for braided effect - scaled for larger viewport
+  // These are visual only - the main path is what connects stations
+  const offset1 = points.map(p => ({ x: p.x - 8, y: p.y + 5 }));
+  const offset2 = points.map(p => ({ x: p.x + 8, y: p.y - 5 }));
+  return {
+    main: basePath, // This is the actual path that passes through stations
+    braid1: generateSmoothPath(offset1), // Visual effect only
+    braid2: generateSmoothPath(offset2)  // Visual effect only
+  };
+}
+
+/**
+ * Generate all metro line paths with hardcoded historical waypoints
+ * This function contains the specific path definitions for each metro line
+ * @param {Function} yearToX - Function to convert year to X coordinate
+ * @param {number} viewboxHeight - Height of the viewbox
+ * @returns {Object} Path strings keyed by line name (orange, purple, green, red, blue)
+ */
+export function generateMetroPaths(yearToX, viewboxHeight) {
+  // Define consistent Y positions for each line's corridor
+  const LINE_Y = {
+    tech: viewboxHeight * 0.18,      // Cyan - Top
+    war: viewboxHeight * 0.34,       // Red - Upper middle  
+    population: viewboxHeight * 0.50, // Green - Center
+    philosophy: viewboxHeight * 0.66, // Orange - Lower middle
+    empire: viewboxHeight * 0.82     // Purple - Bottom
+  };
+  
+  // Final convergence point where all lines meet
+  const CONVERGENCE_X = yearToX(2025);
+  const CONVERGENCE_Y = viewboxHeight * 0.15;
+  
+  // 1. BLUE (Tech) - Horizontal line at top, curves up at end
+  const bluePts = [
+    { x: 0, y: LINE_Y.tech },
+    { x: yearToX(-10000), y: LINE_Y.tech },
+    { x: yearToX(-8000), y: LINE_Y.tech },
+    { x: yearToX(-6000), y: LINE_Y.tech },
+    { x: yearToX(-3500), y: LINE_Y.tech },
+    { x: yearToX(-3200), y: LINE_Y.tech },
+    { x: yearToX(-3000), y: LINE_Y.tech },
+    { x: yearToX(-1200), y: LINE_Y.tech },
+    { x: yearToX(800), y: LINE_Y.tech },
+    { x: yearToX(1455), y: LINE_Y.tech },
+    { x: yearToX(1543), y: LINE_Y.tech },
+    { x: yearToX(1712), y: LINE_Y.tech },
+    { x: yearToX(1800), y: LINE_Y.tech },
+    { x: yearToX(1900), y: LINE_Y.tech },
+    { x: yearToX(1950), y: LINE_Y.tech },
+    { x: yearToX(1990), y: LINE_Y.tech },
+    { x: yearToX(2010), y: LINE_Y.tech * 0.8 },
+    { x: CONVERGENCE_X, y: CONVERGENCE_Y },
+    { x: CONVERGENCE_X + 50, y: 0 }
+  ];
+  
+  // 2. RED (War) - Starts later, stays horizontal in its band
+  const redPts = [
+    { x: yearToX(-1200), y: LINE_Y.war },
+    { x: yearToX(476), y: LINE_Y.war },
+    { x: yearToX(793), y: LINE_Y.war },
+    { x: yearToX(1206), y: LINE_Y.war },
+    { x: yearToX(1492), y: LINE_Y.war },
+    { x: yearToX(1789), y: LINE_Y.war },
+    { x: yearToX(1850), y: LINE_Y.war },
+    { x: yearToX(1914), y: LINE_Y.war },
+    { x: yearToX(1945), y: LINE_Y.war },
+    { x: yearToX(1990), y: LINE_Y.war },
+    { x: yearToX(2010), y: LINE_Y.war * 0.85 },
+    { x: CONVERGENCE_X, y: CONVERGENCE_Y + 30 }
+  ];
+  
+  // 3. GREEN (Population) - Center line, stays horizontal
+  const greenPts = [
+    { x: 0, y: LINE_Y.population },
+    { x: yearToX(-10000), y: LINE_Y.population },
+    { x: yearToX(-4000), y: LINE_Y.population },
+    { x: yearToX(-3500), y: LINE_Y.population },
+    { x: yearToX(-500), y: LINE_Y.population },
+    { x: yearToX(100), y: LINE_Y.population },
+    { x: yearToX(476), y: LINE_Y.population },
+    { x: yearToX(1347), y: LINE_Y.population * 1.05 }, // Slight dip for Black Death
+    { x: yearToX(1492), y: LINE_Y.population },
+    { x: yearToX(1800), y: LINE_Y.population },
+    { x: yearToX(1900), y: LINE_Y.population * 0.95 },
+    { x: yearToX(1950), y: LINE_Y.population * 0.85 },
+    { x: yearToX(2000), y: LINE_Y.population * 0.7 },
+    { x: yearToX(2015), y: LINE_Y.population * 0.5 },
+    { x: CONVERGENCE_X, y: CONVERGENCE_Y + 60 }
+  ];
+  
+  // 4. ORANGE (Philosophy) - Lower middle band
+  const orangePts = [
+    { x: yearToX(-10000), y: LINE_Y.philosophy },
+    { x: yearToX(-1750), y: LINE_Y.philosophy },
+    { x: yearToX(-776), y: LINE_Y.philosophy },
+    { x: yearToX(-563), y: LINE_Y.philosophy },
+    { x: yearToX(-500), y: LINE_Y.philosophy },
+    { x: yearToX(0), y: LINE_Y.philosophy },
+    { x: yearToX(529), y: LINE_Y.philosophy },
+    { x: yearToX(800), y: LINE_Y.philosophy },
+    { x: yearToX(1215), y: LINE_Y.philosophy },
+    { x: yearToX(1400), y: LINE_Y.philosophy },
+    { x: yearToX(1687), y: LINE_Y.philosophy },
+    { x: yearToX(1859), y: LINE_Y.philosophy },
+    { x: yearToX(1950), y: LINE_Y.philosophy * 0.9 },
+    { x: yearToX(2000), y: LINE_Y.philosophy * 0.75 },
+    { x: CONVERGENCE_X, y: CONVERGENCE_Y + 90 }
+  ];
+  
+  // 5. PURPLE (Empire) - Bottom band, curves up at end
+  const purplePts = [
+    { x: yearToX(-4000), y: LINE_Y.empire },
+    { x: yearToX(-3500), y: LINE_Y.empire },
+    { x: yearToX(-3300), y: LINE_Y.empire },
+    { x: yearToX(-3100), y: LINE_Y.empire },
+    { x: yearToX(-2600), y: LINE_Y.empire },
+    { x: yearToX(-550), y: LINE_Y.empire },
+    { x: yearToX(-500), y: LINE_Y.empire },
+    { x: yearToX(-336), y: LINE_Y.empire },
+    { x: yearToX(-221), y: LINE_Y.empire },
+    { x: yearToX(100), y: LINE_Y.empire },
+    { x: yearToX(618), y: LINE_Y.empire },
+    { x: yearToX(1206), y: LINE_Y.empire },
+    { x: yearToX(1492), y: LINE_Y.empire },
+    { x: yearToX(1800), y: LINE_Y.empire * 0.95 },
+    { x: yearToX(1914), y: LINE_Y.empire * 0.85 },
+    { x: yearToX(2000), y: LINE_Y.empire * 0.6 },
+    { x: CONVERGENCE_X, y: CONVERGENCE_Y + 120 }
+  ];
+
+  const greenBraided = generateBraidedPath(greenPts);
+
+  return {
+    orange: generateSmoothPath(orangePts),
+    purple: generateSmoothPath(purplePts),
+    green: greenBraided,
+    red: generateSmoothPath(redPts),
+    blue: generateSmoothPath(bluePts),
+    connections: {} // Disable complex connections for cleaner look
+  };
+}
+

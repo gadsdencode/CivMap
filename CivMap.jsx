@@ -8,8 +8,9 @@ import { usePerformance, useDebounce, useThrottle } from './hooks/usePerformance
 import { LoadingOverlay, LoadingSpinner } from './components/Loading';
 import AccessibleButton from './components/AccessibleButton';
 import { MetroLine, Station } from './src/components/metro';
-import { generateSmoothPath } from './src/utils/pathGenerator';
+import { generateSmoothPath, generateMetroPaths } from './src/utils/pathGenerator';
 import { LINES } from './src/constants/metroConfig';
+import { useMapState } from './src/hooks/useMapState';
 
 const CivilizationMetroMap = () => {
   // --- Performance Monitoring ---
@@ -24,41 +25,14 @@ const CivilizationMetroMap = () => {
   // Massive viewport to show the full scale of human civilization
   const VIEWBOX_WIDTH = 8000;
   const VIEWBOX_HEIGHT = 4000;
-
-  // --- Loading State ---
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState(null);
-
-  const [hoveredStation, setHoveredStation] = useState(null);
-  const [selectedStation, setSelectedStation] = useState(null);
-  const [animationProgress, setAnimationProgress] = useState(0);
   
-  // Pan and Zoom State
-  const [viewBox, setViewBox] = useState({ x: 0, y: 0, width: VIEWBOX_WIDTH, height: VIEWBOX_HEIGHT });
-  const [isPanning, setIsPanning] = useState(false);
+  // Local refs and state not managed by useMapState
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const viewBoxStartRef = useRef({ x: 0, y: 0 });
+  const svgPointStartRef = useRef({ x: 0, y: 0 }); // SVG coordinate where pan started
   const svgRef = useRef(null);
   const containerRef = useRef(null);
-
-  // Human-Centric UX State
-  const [showWelcome, setShowWelcome] = useState(true);
   const welcomeRef = useRef(null);
-  useFocusTrap(showWelcome, welcomeRef);
-  const [visibleLines, setVisibleLines] = useState({
-    tech: true,
-    population: true,
-    war: true,
-    empire: true,
-    philosophy: true
-  });
-  const [showAllLabels, setShowAllLabels] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-  const [journeyMode, setJourneyMode] = useState(false);
-  const [journeyIndex, setJourneyIndex] = useState(0);
-  const [showMinimap, setShowMinimap] = useState(true);
-  const [focusedEra, setFocusedEra] = useState(null);
 
   // Debounced search for performance
   const debouncedSearchCallback = useCallback((query) => {
@@ -1017,147 +991,40 @@ const CivilizationMetroMap = () => {
     return station;
   }), []);
 
-  // Braided trunk for Green line (multiple overlapping paths)
-  // Scaled for larger viewport
-  // IMPORTANT: Main path passes through stations, braids are visual effect only
-  const generateBraidedPath = (points) => {
-    const basePath = generateSmoothPath(points);
-    // Create offset paths for braided effect - scaled for larger viewport
-    // These are visual only - the main path is what connects stations
-    const offset1 = points.map(p => ({ x: p.x - 8, y: p.y + 5 }));
-    const offset2 = points.map(p => ({ x: p.x + 8, y: p.y - 5 }));
-    return {
-      main: basePath, // This is the actual path that passes through stations
-      braid1: generateSmoothPath(offset1), // Visual effect only
-      braid2: generateSmoothPath(offset2)  // Visual effect only
-    };
-  };
+  // --- Centralized State Management ---
+  // Must be called after stations is defined
+  const { state, actions, navigateJourney, filteredStations: mapFilteredStations } = useMapState(stations);
+  
+  // Extract state for easier access
+  const {
+    isLoading,
+    animationProgress,
+    viewBox,
+    isPanning,
+    hoveredStationId,
+    selectedStation,
+    visibleLines,
+    showWelcome,
+    showFilters,
+    showMinimap,
+    showAllLabels,
+    searchQuery,
+    journeyMode,
+    journeyIndex,
+    focusedEra,
+    error: loadError
+  } = state;
+  
+  // Alias state for backward compatibility
+  const hoveredStation = hoveredStationId;
+  
+  // Focus trap for welcome modal
+  useFocusTrap(showWelcome, welcomeRef);
 
-  // Memoized paths - TRUE METRO STYLE: Each line stays in its own horizontal corridor
-  // Lines only deviate for the final convergence point
+  // Memoized paths - Generated using utility function
   const paths = useMemo(() => {
-    // Define consistent Y positions for each line's corridor
-    const LINE_Y = {
-      tech: VIEWBOX_HEIGHT * 0.18,      // Cyan - Top
-      war: VIEWBOX_HEIGHT * 0.34,       // Red - Upper middle  
-      population: VIEWBOX_HEIGHT * 0.50, // Green - Center
-      philosophy: VIEWBOX_HEIGHT * 0.66, // Orange - Lower middle
-      empire: VIEWBOX_HEIGHT * 0.82     // Purple - Bottom
-    };
-    
-    // Final convergence point where all lines meet
-    const CONVERGENCE_X = yearToX(2025);
-    const CONVERGENCE_Y = VIEWBOX_HEIGHT * 0.15;
-    
-    // 1. BLUE (Tech) - Horizontal line at top, curves up at end
-    const bluePts = [
-      { x: 0, y: LINE_Y.tech },
-      { x: yearToX(-10000), y: LINE_Y.tech },
-      { x: yearToX(-8000), y: LINE_Y.tech },
-      { x: yearToX(-6000), y: LINE_Y.tech },
-      { x: yearToX(-3500), y: LINE_Y.tech },
-      { x: yearToX(-3200), y: LINE_Y.tech },
-      { x: yearToX(-3000), y: LINE_Y.tech },
-      { x: yearToX(-1200), y: LINE_Y.tech },
-      { x: yearToX(800), y: LINE_Y.tech },
-      { x: yearToX(1455), y: LINE_Y.tech },
-      { x: yearToX(1543), y: LINE_Y.tech },
-      { x: yearToX(1712), y: LINE_Y.tech },
-      { x: yearToX(1800), y: LINE_Y.tech },
-      { x: yearToX(1900), y: LINE_Y.tech },
-      { x: yearToX(1950), y: LINE_Y.tech },
-      { x: yearToX(1990), y: LINE_Y.tech },
-      { x: yearToX(2010), y: LINE_Y.tech * 0.8 },
-      { x: CONVERGENCE_X, y: CONVERGENCE_Y },
-      { x: CONVERGENCE_X + 50, y: 0 }
-    ];
-    
-    // 2. RED (War) - Starts later, stays horizontal in its band
-    const redPts = [
-      { x: yearToX(-1200), y: LINE_Y.war },
-      { x: yearToX(476), y: LINE_Y.war },
-      { x: yearToX(793), y: LINE_Y.war },
-      { x: yearToX(1206), y: LINE_Y.war },
-      { x: yearToX(1492), y: LINE_Y.war },
-      { x: yearToX(1789), y: LINE_Y.war },
-      { x: yearToX(1850), y: LINE_Y.war },
-      { x: yearToX(1914), y: LINE_Y.war },
-      { x: yearToX(1945), y: LINE_Y.war },
-      { x: yearToX(1990), y: LINE_Y.war },
-      { x: yearToX(2010), y: LINE_Y.war * 0.85 },
-      { x: CONVERGENCE_X, y: CONVERGENCE_Y + 30 }
-    ];
-    
-    // 3. GREEN (Population) - Center line, stays horizontal
-    const greenPts = [
-      { x: 0, y: LINE_Y.population },
-      { x: yearToX(-10000), y: LINE_Y.population },
-      { x: yearToX(-4000), y: LINE_Y.population },
-      { x: yearToX(-3500), y: LINE_Y.population },
-      { x: yearToX(-500), y: LINE_Y.population },
-      { x: yearToX(100), y: LINE_Y.population },
-      { x: yearToX(476), y: LINE_Y.population },
-      { x: yearToX(1347), y: LINE_Y.population * 1.05 }, // Slight dip for Black Death
-      { x: yearToX(1492), y: LINE_Y.population },
-      { x: yearToX(1800), y: LINE_Y.population },
-      { x: yearToX(1900), y: LINE_Y.population * 0.95 },
-      { x: yearToX(1950), y: LINE_Y.population * 0.85 },
-      { x: yearToX(2000), y: LINE_Y.population * 0.7 },
-      { x: yearToX(2015), y: LINE_Y.population * 0.5 },
-      { x: CONVERGENCE_X, y: CONVERGENCE_Y + 60 }
-    ];
-    
-    // 4. ORANGE (Philosophy) - Lower middle band
-    const orangePts = [
-      { x: yearToX(-10000), y: LINE_Y.philosophy },
-      { x: yearToX(-1750), y: LINE_Y.philosophy },
-      { x: yearToX(-776), y: LINE_Y.philosophy },
-      { x: yearToX(-563), y: LINE_Y.philosophy },
-      { x: yearToX(-500), y: LINE_Y.philosophy },
-      { x: yearToX(0), y: LINE_Y.philosophy },
-      { x: yearToX(529), y: LINE_Y.philosophy },
-      { x: yearToX(800), y: LINE_Y.philosophy },
-      { x: yearToX(1215), y: LINE_Y.philosophy },
-      { x: yearToX(1400), y: LINE_Y.philosophy },
-      { x: yearToX(1687), y: LINE_Y.philosophy },
-      { x: yearToX(1859), y: LINE_Y.philosophy },
-      { x: yearToX(1950), y: LINE_Y.philosophy * 0.9 },
-      { x: yearToX(2000), y: LINE_Y.philosophy * 0.75 },
-      { x: CONVERGENCE_X, y: CONVERGENCE_Y + 90 }
-    ];
-    
-    // 5. PURPLE (Empire) - Bottom band, curves up at end
-    const purplePts = [
-      { x: yearToX(-4000), y: LINE_Y.empire },
-      { x: yearToX(-3500), y: LINE_Y.empire },
-      { x: yearToX(-3300), y: LINE_Y.empire },
-      { x: yearToX(-3100), y: LINE_Y.empire },
-      { x: yearToX(-2600), y: LINE_Y.empire },
-      { x: yearToX(-550), y: LINE_Y.empire },
-      { x: yearToX(-500), y: LINE_Y.empire },
-      { x: yearToX(-336), y: LINE_Y.empire },
-      { x: yearToX(-221), y: LINE_Y.empire },
-      { x: yearToX(100), y: LINE_Y.empire },
-      { x: yearToX(618), y: LINE_Y.empire },
-      { x: yearToX(1206), y: LINE_Y.empire },
-      { x: yearToX(1492), y: LINE_Y.empire },
-      { x: yearToX(1800), y: LINE_Y.empire * 0.95 },
-      { x: yearToX(1914), y: LINE_Y.empire * 0.85 },
-      { x: yearToX(2000), y: LINE_Y.empire * 0.6 },
-      { x: CONVERGENCE_X, y: CONVERGENCE_Y + 120 }
-    ];
-
-    const greenBraided = generateBraidedPath(greenPts);
-
-    return {
-      orange: generateSmoothPath(orangePts),
-      purple: generateSmoothPath(purplePts),
-      green: greenBraided,
-      red: generateSmoothPath(redPts),
-      blue: generateSmoothPath(bluePts),
-      connections: {} // Disable complex connections for cleaner look
-    };
-  }, [stations]);
+    return generateMetroPaths(yearToX, VIEWBOX_HEIGHT);
+  }, [yearToX]);
 
   // Initialize viewBox on mount - Human-Centric: Show meaningful overview
   useEffect(() => {
@@ -1166,7 +1033,7 @@ const CivilizationMetroMap = () => {
       // This gives users a sense of the full scope while being centered
       const initialWidth = VIEWBOX_WIDTH * 0.8;
       const initialHeight = VIEWBOX_HEIGHT * 0.7;
-      setViewBox({ 
+      actions.setViewBox({ 
         x: VIEWBOX_WIDTH * 0.1, 
         y: VIEWBOX_HEIGHT * 0.15, 
         width: initialWidth, 
@@ -1175,18 +1042,18 @@ const CivilizationMetroMap = () => {
       
       // Simulate loading time for smooth experience
       const loadTimer = setTimeout(() => {
-        setIsLoading(false);
+        actions.setLoading(false);
         announce('Civilization Metro Map loaded successfully');
       }, 800);
 
       return () => clearTimeout(loadTimer);
     } catch (err) {
-      setLoadError(err);
-      setIsLoading(false);
+      actions.setError(err);
+      actions.setLoading(false);
       showError('Failed to initialize map. Please refresh the page.');
       console.error('Initialization error:', err);
     }
-  }, [announce, showError]);
+  }, [announce, showError, actions]);
 
   // Animate path drawing on mount with error handling
   useEffect(() => {
@@ -1199,7 +1066,7 @@ const CivilizationMetroMap = () => {
         try {
           const elapsed = Date.now() - startTime;
           const progress = Math.min(elapsed / duration, 1);
-          setAnimationProgress(progress);
+          actions.setAnimationProgress(progress);
           if (progress < 1) {
             requestAnimationFrame(animate);
           } else {
@@ -1207,54 +1074,182 @@ const CivilizationMetroMap = () => {
           }
         } catch (err) {
           console.error('Animation error:', err);
-          setAnimationProgress(1); // Complete animation on error
+          actions.setAnimationProgress(1); // Complete animation on error
         }
       };
       animate();
     } catch (err) {
       console.error('Animation setup error:', err);
-      setAnimationProgress(1);
+      actions.setAnimationProgress(1);
     }
-  }, [isLoading, announce]);
+  }, [isLoading, announce, actions]);
 
-  // Pan and Zoom Handlers
-  const panViewBox = useCallback((dx, dy) => {
-    setViewBox(prev => ({
-      ...prev,
-      x: viewBoxStartRef.current.x - dx,
-      y: viewBoxStartRef.current.y - dy
-    }));
+  // Throttled pan update using requestAnimationFrame for smooth performance
+  const panAnimationFrameRef = useRef(null);
+  const latestMouseEventRef = useRef(null);
+
+  // Check if the click target is an interactive element (station, button, etc.)
+  const isInteractiveElement = useCallback((target) => {
+    if (!target) return false;
+    
+    // Check if target or any parent has a class indicating it's interactive
+    let element = target;
+    while (element && element !== containerRef.current && element !== document.body) {
+      // Check for station elements (g elements with station class)
+      if (element.classList && element.classList.contains('station')) {
+        return true;
+      }
+      // Check for buttons and other interactive elements
+      if (element.tagName === 'BUTTON' || element.tagName === 'A' || 
+          element.closest && (element.closest('button') || element.closest('a'))) {
+        return true;
+      }
+      // Check if it's a text element that's part of a station label
+      if (element.tagName === 'text' && element.closest && element.closest('.station')) {
+        return true;
+      }
+      // Check for input elements
+      if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.tagName === 'SELECT') {
+        return true;
+      }
+      element = element.parentElement;
+    }
+    return false;
   }, []);
 
-  const throttledPan = useThrottle(panViewBox, 16); // Throttle to ~60fps
-
-  const handleMouseDown = (e) => {
-    // Only pan if clicking on background (not on stations)
-    if (e.target.tagName === 'svg' || e.target.tagName === 'path' || e.target.tagName === 'line' || e.target.tagName === 'text') {
-      setIsPanning(true);
+  const handleMouseDown = useCallback((e) => {
+    // Only pan if clicking on background (not on stations or interactive elements)
+    const target = e.target;
+    
+    // Check if clicking on an interactive element (stations call stopPropagation, so this is a safety check)
+    const isInteractive = isInteractiveElement(target);
+    
+    // Only start panning on left mouse button
+    if (e.button !== 0) return;
+    
+    // Don't pan if clicking on interactive elements
+    if (isInteractive) return;
+    
+    // Allow panning on container div or SVG background elements
+    // Stations already call stopPropagation, so their clicks won't reach here
+    const isContainer = target === containerRef.current;
+    const isSvgBackground = target.tagName === 'svg' || 
+                            target.tagName === 'path' || 
+                            target.tagName === 'line' ||
+                            target.tagName === 'defs' ||
+                            (target.tagName === 'text' && !target.closest?.('.station')) ||
+                            (target.tagName === 'g' && !target.classList?.contains('station'));
+    
+    if ((isContainer || isSvgBackground) && svgRef.current && containerRef.current) {
+      // Store screen coordinates for mouse tracking
       setPanStart({ x: e.clientX, y: e.clientY });
+      
+      // Store initial viewBox position
       viewBoxStartRef.current = { x: viewBox.x, y: viewBox.y };
+      
+      // Convert initial mouse position to SVG coordinates using proper transformation
+      const rect = containerRef.current.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      
+      const svgPoint = svgRef.current.createSVGPoint();
+      svgPoint.x = mouseX;
+      svgPoint.y = mouseY;
+      const pointInSvg = svgPoint.matrixTransform(svgRef.current.getScreenCTM().inverse());
+      svgPointStartRef.current = { x: pointInSvg.x, y: pointInSvg.y };
+      
+      actions.startPan();
       e.preventDefault();
+      e.stopPropagation();
     }
-  };
+  }, [isInteractiveElement, viewBox, actions]);
 
   const handleMouseMove = useCallback((e) => {
-    if (isPanning && containerRef.current) {
+    if (isPanning && containerRef.current && svgRef.current) {
       try {
-        const dx = (e.clientX - panStart.x) * (viewBox.width / containerRef.current.clientWidth);
-        const dy = (e.clientY - panStart.y) * (viewBox.height / containerRef.current.clientHeight);
+        // Store latest mouse event for throttled processing
+        latestMouseEventRef.current = e;
         
-        throttledPan(dx, dy);
+        // Throttle using requestAnimationFrame for smooth ~60fps updates
+        if (!panAnimationFrameRef.current) {
+          panAnimationFrameRef.current = requestAnimationFrame(() => {
+            panAnimationFrameRef.current = null;
+            
+            if (!isPanning || !containerRef.current || !svgRef.current || !latestMouseEventRef.current) {
+              return;
+            }
+            
+            const event = latestMouseEventRef.current;
+            const rect = containerRef.current.getBoundingClientRect();
+            const mouseX = event.clientX - rect.left;
+            const mouseY = event.clientY - rect.top;
+            
+            // Convert current mouse position to SVG coordinates using transformation matrix
+            // This ensures accurate panning at all zoom levels
+            const svgPoint = svgRef.current.createSVGPoint();
+            svgPoint.x = mouseX;
+            svgPoint.y = mouseY;
+            const currentPointInSvg = svgPoint.matrixTransform(svgRef.current.getScreenCTM().inverse());
+            
+            // Calculate delta in SVG coordinate space
+            // This works correctly at all zoom levels because we're using the SVG transformation matrix
+            const dx = svgPointStartRef.current.x - currentPointInSvg.x;
+            const dy = svgPointStartRef.current.y - currentPointInSvg.y;
+            
+            // Update viewBox based on the delta in SVG coordinates
+            actions.setViewBox({
+              ...viewBox,
+              x: viewBoxStartRef.current.x + dx,
+              y: viewBoxStartRef.current.y + dy
+            });
+          });
+        }
+        
+        e.preventDefault();
       } catch (err) {
         console.error('Pan error:', err);
-        setIsPanning(false);
+        actions.endPan();
       }
     }
-  }, [isPanning, panStart, viewBox, throttledPan]);
+  }, [isPanning, viewBox, actions]);
 
-  const handleMouseUp = () => {
-    setIsPanning(false);
-  };
+  const handleMouseUp = useCallback((e) => {
+    if (isPanning) {
+      // Cancel any pending pan animation frame
+      if (panAnimationFrameRef.current) {
+        cancelAnimationFrame(panAnimationFrameRef.current);
+        panAnimationFrameRef.current = null;
+      }
+      latestMouseEventRef.current = null;
+      actions.endPan();
+      e?.preventDefault();
+    }
+  }, [isPanning, actions]);
+
+  // Attach mouse move and up listeners to window for better drag experience
+  useEffect(() => {
+    if (isPanning) {
+      const handleWindowMouseMove = (e) => {
+        handleMouseMove(e);
+      };
+      const handleWindowMouseUp = (e) => {
+        handleMouseUp(e);
+      };
+
+      window.addEventListener('mousemove', handleWindowMouseMove);
+      window.addEventListener('mouseup', handleWindowMouseUp);
+      // Prevent text selection while dragging
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'grabbing';
+
+      return () => {
+        window.removeEventListener('mousemove', handleWindowMouseMove);
+        window.removeEventListener('mouseup', handleWindowMouseUp);
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+      };
+    }
+  }, [isPanning, handleMouseMove, handleMouseUp]);
 
   const handleWheel = (e) => {
     e.preventDefault();
@@ -1289,7 +1284,7 @@ const CivilizationMetroMap = () => {
     const newX = pointInSvg.x - (mouseX / rect.width) * constrainedWidth;
     const newY = pointInSvg.y - (mouseY / rect.height) * constrainedHeight;
 
-    setViewBox({
+    actions.setViewBox({
       x: Math.max(0, Math.min(VIEWBOX_WIDTH - constrainedWidth, newX)),
       y: Math.max(0, Math.min(VIEWBOX_HEIGHT - constrainedHeight, newY)),
       width: constrainedWidth,
@@ -1297,40 +1292,10 @@ const CivilizationMetroMap = () => {
     });
   };
 
-  // Zoom control functions
-  const zoomIn = () => {
-    const centerX = viewBox.x + viewBox.width / 2;
-    const centerY = viewBox.y + viewBox.height / 2;
-    const zoomFactor = 0.8; // Zoom in by 20%
-    const newWidth = viewBox.width * zoomFactor;
-    const newHeight = viewBox.height * zoomFactor;
-
-    setViewBox({
-      x: Math.max(0, Math.min(VIEWBOX_WIDTH - newWidth, centerX - newWidth / 2)),
-      y: Math.max(0, Math.min(VIEWBOX_HEIGHT - newHeight, centerY - newHeight / 2)),
-      width: newWidth,
-      height: newHeight
-    });
-  };
-
-  const zoomOut = () => {
-    const centerX = viewBox.x + viewBox.width / 2;
-    const centerY = viewBox.y + viewBox.height / 2;
-    const zoomFactor = 1.25; // Zoom out by 25%
-    const newWidth = Math.min(VIEWBOX_WIDTH, viewBox.width * zoomFactor);
-    const newHeight = Math.min(VIEWBOX_HEIGHT, viewBox.height * zoomFactor);
-
-    setViewBox({
-      x: Math.max(0, Math.min(VIEWBOX_WIDTH - newWidth, centerX - newWidth / 2)),
-      y: Math.max(0, Math.min(VIEWBOX_HEIGHT - newHeight, centerY - newHeight / 2)),
-      width: newWidth,
-      height: newHeight
-    });
-  };
-
-  const resetView = () => {
-    setViewBox({ x: 0, y: 0, width: VIEWBOX_WIDTH, height: VIEWBOX_HEIGHT });
-  };
+  // Zoom control functions - use actions from useMapState
+  const zoomIn = () => actions.zoomIn();
+  const zoomOut = () => actions.zoomOut();
+  const resetView = () => actions.resetView();
 
   const fitToView = () => {
     if (!containerRef.current) return;
@@ -1348,7 +1313,7 @@ const CivilizationMetroMap = () => {
       newHeight = VIEWBOX_WIDTH / containerAspect;
     }
 
-    setViewBox({
+    actions.setViewBox({
       x: (VIEWBOX_WIDTH - newWidth) / 2,
       y: (VIEWBOX_HEIGHT - newHeight) / 2,
       width: newWidth,
@@ -1379,27 +1344,8 @@ const CivilizationMetroMap = () => {
   }, []);
 
   // Filtered and searchable stations
-  const filteredStations = useMemo(() => {
-    let filtered = stations;
-    
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(s => 
-        s.name.toLowerCase().includes(query) ||
-        s.yearLabel.toLowerCase().includes(query) ||
-        s.details.toLowerCase().includes(query)
-      );
-    }
-    
-    // Era filter
-    if (focusedEra) {
-      const [start, end] = focusedEra;
-      filtered = filtered.filter(s => s.year >= start && s.year <= end);
-    }
-    
-    return filtered;
-  }, [stations, searchQuery, focusedEra]);
+  // Use filtered stations from useMapState (already handles search and era filtering)
+  const filteredStations = mapFilteredStations;
 
   // Journey stations - key milestones for guided tour
   const journeyStations = useMemo(() => [
@@ -1408,57 +1354,23 @@ const CivilizationMetroMap = () => {
 
   const activeData = selectedStation || (hoveredStation ? stations.find(s => s.id === hoveredStation) : null);
 
-  // Journey navigation
-  const navigateJourney = (direction) => {
-    if (direction === 'next') {
-      const nextIndex = (journeyIndex + 1) % journeyStations.length;
-      setJourneyIndex(nextIndex);
-      const station = stations.find(s => s.id === journeyStations[nextIndex]);
-      if (station) {
-        setSelectedStation(station);
-        // Center view on station
-        const centerX = station.coords.x - viewBox.width / 2;
-        const centerY = station.coords.y - viewBox.height / 2;
-        setViewBox(prev => ({
-          ...prev,
-          x: Math.max(0, Math.min(VIEWBOX_WIDTH - prev.width, centerX)),
-          y: Math.max(0, Math.min(VIEWBOX_HEIGHT - prev.height, centerY))
-        }));
-      }
-    } else {
-      const prevIndex = (journeyIndex - 1 + journeyStations.length) % journeyStations.length;
-      setJourneyIndex(prevIndex);
-      const station = stations.find(s => s.id === journeyStations[prevIndex]);
-      if (station) {
-        setSelectedStation(station);
-        const centerX = station.coords.x - viewBox.width / 2;
-        const centerY = station.coords.y - viewBox.height / 2;
-        setViewBox(prev => ({
-          ...prev,
-          x: Math.max(0, Math.min(VIEWBOX_WIDTH - prev.width, centerX)),
-          y: Math.max(0, Math.min(VIEWBOX_HEIGHT - prev.height, centerY))
-        }));
-      }
-    }
-  };
-
   // Keyboard Navigation - Commercial-Grade
   useKeyboardNavigation({
     onEscape: () => {
       if (showWelcome) {
-        setShowWelcome(false);
+        actions.setWelcome(false);
         announce('Welcome overlay closed');
       } else if (selectedStation) {
-        setSelectedStation(null);
+        actions.clearSelection();
         announce('Station details closed');
       } else if (showFilters) {
-        setShowFilters(false);
+        actions.toggleFilters();
         announce('Filters panel closed');
       }
     },
     onEnter: () => {
       if (showWelcome && !journeyMode) {
-        setShowWelcome(false);
+        actions.setWelcome(false);
         announce('Starting exploration');
       }
     },
@@ -1557,12 +1469,9 @@ const CivilizationMetroMap = () => {
                 onClick={() => {
                   try {
                     saveFocus();
-                    setShowWelcome(false);
-                    setJourneyMode(true);
-                    setJourneyIndex(0);
                     const firstStation = stations.find(s => s.id === journeyStations[0]);
                     if (firstStation) {
-                      setSelectedStation(firstStation);
+                      actions.startJourney(firstStation);
                       announce(`Starting journey at ${firstStation.name}`);
                       success('Journey mode activated');
                     }
@@ -1582,7 +1491,7 @@ const CivilizationMetroMap = () => {
               </AccessibleButton>
               <AccessibleButton
                 onClick={() => {
-                  setShowWelcome(false);
+                  actions.setWelcome(false);
                   announce('Welcome overlay closed. You can now explore freely.');
                   info('Tip: Use search to find specific events');
                 }}
@@ -1617,13 +1526,13 @@ const CivilizationMetroMap = () => {
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => actions.setSearchQuery(e.target.value)}
             placeholder="Search stations..."
             className="pl-10 pr-4 py-2 bg-neutral-900/90 backdrop-blur-md border border-cyan-900/50 rounded-lg text-white text-sm placeholder-cyan-400/40 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 w-64"
           />
           {searchQuery && (
             <button
-              onClick={() => setSearchQuery('')}
+              onClick={() => actions.setSearchQuery('')}
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-cyan-400/60 hover:text-white"
             >
               <X size={16} />
@@ -1633,7 +1542,7 @@ const CivilizationMetroMap = () => {
 
         {/* Filter Toggle */}
         <button
-          onClick={() => setShowFilters(!showFilters)}
+          onClick={() => actions.toggleFilters()}
           className="flex items-center gap-2 px-4 py-2 bg-neutral-900/90 backdrop-blur-md border border-cyan-900/50 rounded-lg text-cyan-400 hover:bg-neutral-800 transition-colors text-sm font-medium"
         >
           <Filter size={16} />
@@ -1657,7 +1566,13 @@ const CivilizationMetroMap = () => {
                   <input
                     type="checkbox"
                     checked={visibleLines[line.key]}
-                    onChange={(e) => setVisibleLines(prev => ({ ...prev, [line.key]: e.target.checked }))}
+                    onChange={(e) => {
+                      if (!e.target.checked && visibleLines[line.key]) {
+                        actions.toggleLine(line.key);
+                      } else if (e.target.checked && !visibleLines[line.key]) {
+                        actions.toggleLine(line.key);
+                      }
+                    }}
                     className="w-4 h-4 rounded border-cyan-900/50 bg-neutral-800 text-cyan-500 focus:ring-cyan-500"
                   />
                   <div className={`flex-1 h-1 rounded bg-${line.color}-500 opacity-${visibleLines[line.key] ? '100' : '30'} group-hover:opacity-100 transition-opacity`}></div>
@@ -1671,7 +1586,11 @@ const CivilizationMetroMap = () => {
                 <input
                   type="checkbox"
                   checked={showAllLabels}
-                  onChange={(e) => setShowAllLabels(e.target.checked)}
+                  onChange={(e) => {
+                    if (e.target.checked !== showAllLabels) {
+                      actions.toggleLabels();
+                    }
+                  }}
                   className="w-4 h-4 rounded border-cyan-900/50 bg-neutral-800 text-cyan-500"
                 />
                 <span className="text-sm text-neutral-300">Show all labels</span>
@@ -1683,37 +1602,37 @@ const CivilizationMetroMap = () => {
               <h3 className="text-xs uppercase tracking-widest text-cyan-500 mb-2">Quick Views</h3>
               <div className="space-y-1">
                 <button
-                  onClick={() => setFocusedEra(null)}
+                  onClick={() => actions.setEraFilter(null)}
                   className="w-full text-left px-2 py-1 text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
                 >
                   All Time
                 </button>
                 <button
-                  onClick={() => setFocusedEra([-10000, -1000])}
+                  onClick={() => actions.setEraFilter([-10000, -1000])}
                   className="w-full text-left px-2 py-1 text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
                 >
                   Ancient (10k BCE - 1k BCE)
                 </button>
                 <button
-                  onClick={() => setFocusedEra([-1000, 500])}
+                  onClick={() => actions.setEraFilter([-1000, 500])}
                   className="w-full text-left px-2 py-1 text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
                 >
                   Classical (1k BCE - 500 CE)
                 </button>
                 <button
-                  onClick={() => setFocusedEra([500, 1500])}
+                  onClick={() => actions.setEraFilter([500, 1500])}
                   className="w-full text-left px-2 py-1 text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
                 >
                   Medieval (500 - 1500 CE)
                 </button>
                 <button
-                  onClick={() => setFocusedEra([1500, 1900])}
+                  onClick={() => actions.setEraFilter([1500, 1900])}
                   className="w-full text-left px-2 py-1 text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
                 >
                   Modern (1500 - 1900 CE)
                 </button>
                 <button
-                  onClick={() => setFocusedEra([1900, 2025])}
+                  onClick={() => actions.setEraFilter([1900, 2025])}
                   className="w-full text-left px-2 py-1 text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
                 >
                   Contemporary (1900 - 2025 CE)
@@ -1732,7 +1651,7 @@ const CivilizationMetroMap = () => {
                 <p className="text-xs text-cyan-300/70">{journeyIndex + 1} of {journeyStations.length}</p>
               </div>
               <button
-                onClick={() => setJourneyMode(false)}
+                onClick={() => actions.endJourney()}
                 className="text-cyan-400/60 hover:text-white"
               >
                 <X size={16} />
@@ -1757,7 +1676,7 @@ const CivilizationMetroMap = () => {
 
         {/* Help Button */}
         <button
-          onClick={() => setShowWelcome(true)}
+          onClick={() => actions.setWelcome(true)}
           className="p-2 bg-neutral-900/90 backdrop-blur-md border border-cyan-900/50 rounded-lg text-cyan-400 hover:bg-neutral-800 transition-colors"
           title="Show Help"
         >
@@ -1766,7 +1685,7 @@ const CivilizationMetroMap = () => {
 
         {/* Minimap Toggle */}
         <button
-          onClick={() => setShowMinimap(!showMinimap)}
+          onClick={() => actions.toggleMinimap()}
           className="p-2 bg-neutral-900/90 backdrop-blur-md border border-cyan-900/50 rounded-lg text-cyan-400 hover:bg-neutral-800 transition-colors"
           title={showMinimap ? "Hide Minimap" : "Show Minimap"}
         >
@@ -2036,12 +1955,14 @@ const CivilizationMetroMap = () => {
                   isInJourney={isInJourney}
                   isSearchMatch={isSearchMatch}
                   showLabel={shouldShowLabel}
-                  onHover={setHoveredStation}
+                  onHover={actions.hoverStation}
                   onSelect={(station) => {
-                    setSelectedStation(station);
+                    actions.selectStation(station);
                     if (journeyMode) {
                       const idx = journeyStations.indexOf(station.id);
-                      if (idx !== -1) setJourneyIndex(idx);
+                      if (idx !== -1) {
+                        actions.journeyGoTo(idx, station);
+                      }
                     }
                   }}
                   visibleLines={visibleLines}
@@ -2140,14 +2061,7 @@ const CivilizationMetroMap = () => {
                     opacity="0.9"
                     className="cursor-pointer"
                     onClick={() => {
-                      setSelectedStation(s);
-                      const centerX = s.coords.x - viewBox.width / 2;
-                      const centerY = s.coords.y - viewBox.height / 2;
-                      setViewBox(prev => ({
-                        ...prev,
-                        x: Math.max(0, Math.min(VIEWBOX_WIDTH - prev.width, centerX)),
-                        y: Math.max(0, Math.min(VIEWBOX_HEIGHT - prev.height, centerY))
-                      }));
+                      actions.centerOnStation(s);
                     }}
                   />
                 ))}
@@ -2186,14 +2100,7 @@ const CivilizationMetroMap = () => {
                   <button
                     key={s.id}
                     onClick={() => {
-                      setSelectedStation(s);
-                      const centerX = s.coords.x - viewBox.width / 2;
-                      const centerY = s.coords.y - viewBox.height / 2;
-                      setViewBox(prev => ({
-                        ...prev,
-                        x: Math.max(0, Math.min(VIEWBOX_WIDTH - prev.width, centerX)),
-                        y: Math.max(0, Math.min(VIEWBOX_HEIGHT - prev.height, centerY))
-                      }));
+                      actions.centerOnStation(s);
                     }}
                     className="w-full text-left p-3 bg-neutral-800/50 hover:bg-neutral-800 rounded border border-neutral-700/50 hover:border-cyan-500/50 transition-colors"
                   >
@@ -2255,7 +2162,7 @@ const CivilizationMetroMap = () => {
             <div className="flex flex-col h-full relative">
               {/* Close Button */}
               <button 
-                onClick={() => setSelectedStation(null)}
+                onClick={() => actions.clearSelection()}
                 className="absolute top-4 right-4 p-2 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded-full transition-colors z-10"
               >
                 <X size={20} />
