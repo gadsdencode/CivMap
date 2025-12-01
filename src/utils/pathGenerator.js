@@ -1,10 +1,12 @@
 /**
  * SVG Path Generation Utilities
  * Clean, functional approach to generating metro line paths
+ * Dynamically generates paths from station data to ensure perfect alignment
  */
 
 /**
  * Generate a smooth bezier curve path through points
+ * Enhanced to handle straight lines (corridors) better
  * @param {Array<{x: number, y: number}>} points - Array of coordinate points
  * @returns {string} SVG path d attribute
  */
@@ -16,24 +18,189 @@ export function generateSmoothPath(points) {
   for (let i = 1; i < points.length; i++) {
     const prev = points[i - 1];
     const curr = points[i];
-    const next = points[i + 1] || curr;
     
-    // Direction vectors for curve control
-    const dx1 = curr.x - prev.x;
-    const dy1 = curr.y - prev.y;
-    const dx2 = (next.x - curr.x) || dx1;
-    const dy2 = (next.y - curr.y) || dy1;
+    // Calculate control points
+    // If we are on a long straight segment (same Y), keep it straight
+    const isHorizontal = Math.abs(prev.y - curr.y) < 1;
     
-    // Control points for smooth passage through current point
-    const cp1x = prev.x + dx1 * 0.3;
-    const cp1y = prev.y + dy1 * 0.3;
-    const cp2x = curr.x - dx2 * 0.15;
-    const cp2y = curr.y - dy2 * 0.15;
-    
-    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${curr.x} ${curr.y}`;
+    if (isHorizontal) {
+      // Linear line for horizontal segments
+      d += ` L ${curr.x} ${curr.y}`;
+    } else {
+      // Bezier curve for transitions
+      // Tension determines how "tight" the curve is. 0.4 is a smooth value.
+      const tension = 0.4;
+      
+      const dx = curr.x - prev.x;
+      
+      // Control Point 1 (leaving previous)
+      const cp1x = prev.x + (dx * tension);
+      const cp1y = prev.y; // Keep Y tangent flat at start to avoid dipping
+      
+      // Control Point 2 (arriving at current)
+      const cp2x = curr.x - (dx * tension);
+      const cp2y = curr.y; // Keep Y tangent flat at end
+      
+      d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${curr.x} ${curr.y}`;
+    }
   }
   
   return d;
+}
+
+/**
+ * Generate braided path for Green line (Population)
+ * @param {Array<{x: number, y: number}>} points - Array of coordinate points
+ * @returns {{main: string, braid1: string, braid2: string}} Braided path variants
+ */
+export function generateBraidedPath(points) {
+  const basePath = generateSmoothPath(points);
+  
+  // Create subtle offset paths for braided visual effect
+  // These are visual only - the main path is what connects stations
+  const offset1 = points.map(p => ({ x: p.x - 6, y: p.y + 4 }));
+  const offset2 = points.map(p => ({ x: p.x + 6, y: p.y - 4 }));
+  
+  return {
+    main: basePath, // This is the actual path that passes through stations
+    braid1: generateSmoothPath(offset1), // Visual effect only
+    braid2: generateSmoothPath(offset2)  // Visual effect only
+  };
+}
+
+/**
+ * Generate all metro line paths dynamically based on stations
+ * This ensures every line passes perfectly through the center of every station it serves
+ * 
+ * @param {Function} yearToX - Function to convert year to X coordinate
+ * @param {number} viewboxHeight - Height of the viewbox
+ * @param {Array} stations - Array of processed station objects
+ * @returns {Object} Path strings keyed by line name
+ */
+export function generateMetroPaths(yearToX, viewboxHeight, stations) {
+  // Define consistent Y positions (Corridors) for each line
+  const LINE_Y = {
+    tech: viewboxHeight * 0.20,       // Cyan - Top
+    war: viewboxHeight * 0.35,        // Red - Upper middle  
+    population: viewboxHeight * 0.50, // Green - Center
+    philosophy: viewboxHeight * 0.65, // Orange - Lower middle
+    empire: viewboxHeight * 0.80      // Purple - Bottom
+  };
+  
+  // Final convergence point (The Singularity)
+  const CONVERGENCE_X = yearToX(2025);
+  const CONVERGENCE_Y_BASE = viewboxHeight * 0.15;
+  
+  // Convergence offsets to create a neat vertical bundle at the end
+  // This prevents z-fighting and messy overlap
+  const convergenceOffsets = {
+    tech: 0,
+    population: 15,
+    war: 30,
+    empire: 45,
+    philosophy: 60
+  };
+
+  /**
+   * Helper to get path points for a specific line
+   * @param {string} lineKey - Line identifier (lowercase: 'tech', 'war', etc.)
+   * @returns {Array<{x: number, y: number}>} Path points
+   */
+  const getPointsForLine = (lineKey) => {
+    // Convert lineKey to proper case for station matching
+    const lineId = lineKey.charAt(0).toUpperCase() + lineKey.slice(1);
+    
+    // 1. Start Point (Far Left)
+    const points = [
+      { x: 0, y: LINE_Y[lineKey] },
+      { x: yearToX(-10000), y: LINE_Y[lineKey] }
+    ];
+    
+    // 2. Add all stations belonging to this line
+    const lineStations = stations
+      .filter(s => s.lines.includes(lineId))
+      .sort((a, b) => a.year - b.year);
+    
+    lineStations.forEach(station => {
+      const lastPt = points[points.length - 1];
+      
+      // Optimization: Don't add a point if it's too close to the last one (prevents kinks)
+      if (Math.abs(lastPt.x - station.coords.x) > 50) {
+        // If station is on a different Y (hub/multi-line station), 
+        // add a transition point first to stay in lane until we need to curve
+        if (Math.abs(lastPt.y - station.coords.y) > 10) {
+          // Add a point just before the station to start the curve smoothly
+          const transitionX = station.coords.x - 100;
+          if (transitionX > lastPt.x) {
+            points.push({ x: transitionX, y: lastPt.y });
+          }
+        }
+        
+        // Add the actual station point
+        points.push({ x: station.coords.x, y: station.coords.y });
+        
+        // If we curved to a station, add a return point after to curve back to lane
+        if (Math.abs(lastPt.y - station.coords.y) > 10 && station.year < 2000) {
+          const returnX = station.coords.x + 100;
+          points.push({ x: returnX, y: LINE_Y[lineKey] });
+        }
+      }
+    });
+    
+    // 3. Add Convergence Points
+    const lastStation = lineStations[lineStations.length - 1];
+    const lastPoint = points[points.length - 1];
+    
+    // Add a pre-convergence point to smooth the curve upward
+    // Only if the last station is not already very close to 2025
+    if (!lastStation || lastStation.year < 2010) {
+      // Stay in lane until the very end
+      const preConvergeX = yearToX(2015);
+      if (preConvergeX > lastPoint.x) {
+        points.push({ x: preConvergeX, y: LINE_Y[lineKey] });
+      }
+    }
+    
+    // The Singularity Bundle - organized vertically
+    points.push({ 
+      x: CONVERGENCE_X, 
+      y: CONVERGENCE_Y_BASE + convergenceOffsets[lineKey] 
+    });
+    
+    // Infinite Future (shoot off to the right and slightly up)
+    points.push({ 
+      x: CONVERGENCE_X + 800, 
+      y: CONVERGENCE_Y_BASE + convergenceOffsets[lineKey] - 150
+    });
+    
+    return points;
+  };
+
+  // Generate paths for each line
+  const techPoints = getPointsForLine('tech');
+  const warPoints = getPointsForLine('war');
+  const populationPoints = getPointsForLine('population');
+  const philosophyPoints = getPointsForLine('philosophy');
+  const empirePoints = getPointsForLine('empire');
+
+  return {
+    // Main paths - named to match existing color references
+    blue: generateSmoothPath(techPoints),
+    red: generateSmoothPath(warPoints),
+    green: generateBraidedPath(populationPoints), // Returns object with main, braid1, braid2
+    orange: generateSmoothPath(philosophyPoints),
+    purple: generateSmoothPath(empirePoints),
+    
+    // Also provide paths keyed by line ID for flexibility
+    tech: generateSmoothPath(techPoints),
+    war: generateSmoothPath(warPoints),
+    population: generateBraidedPath(populationPoints),
+    philosophy: generateSmoothPath(philosophyPoints),
+    empire: generateSmoothPath(empirePoints),
+    
+    // Disable complex connections for cleaner look
+    connections: {}
+  };
 }
 
 /**
@@ -56,7 +223,7 @@ export function generateLayeredPath(points) {
 }
 
 /**
- * Create metro line path points for a specific line
+ * Create metro line path points for a specific line (legacy support)
  * @param {string} lineId - Line identifier ('tech', 'war', etc.)
  * @param {number} lineY - Y coordinate for this line's corridor
  * @param {Array<number>} keyYears - Years where this line has stations
@@ -89,7 +256,7 @@ export function createLinePathPoints(lineId, lineY, keyYears, convergence, yearT
 }
 
 /**
- * Generate all metro line paths
+ * Generate all metro line paths (legacy support)
  * @param {Object} config - Configuration with yearToX, lineY positions, convergence
  * @param {Object} stationsByLine - Stations grouped by line
  * @returns {Object} Path strings keyed by line id
@@ -125,153 +292,3 @@ export function generateAllPaths(config, stationsByLine) {
   
   return paths;
 }
-
-/**
- * Generate braided path for Green line (multiple overlapping paths)
- * @param {Array<{x: number, y: number}>} points - Array of coordinate points
- * @returns {{main: string, braid1: string, braid2: string}} Braided path variants
- */
-export function generateBraidedPath(points) {
-  const basePath = generateSmoothPath(points);
-  // Create offset paths for braided effect - scaled for larger viewport
-  // These are visual only - the main path is what connects stations
-  const offset1 = points.map(p => ({ x: p.x - 8, y: p.y + 5 }));
-  const offset2 = points.map(p => ({ x: p.x + 8, y: p.y - 5 }));
-  return {
-    main: basePath, // This is the actual path that passes through stations
-    braid1: generateSmoothPath(offset1), // Visual effect only
-    braid2: generateSmoothPath(offset2)  // Visual effect only
-  };
-}
-
-/**
- * Generate all metro line paths with hardcoded historical waypoints
- * This function contains the specific path definitions for each metro line
- * @param {Function} yearToX - Function to convert year to X coordinate
- * @param {number} viewboxHeight - Height of the viewbox
- * @returns {Object} Path strings keyed by line name (orange, purple, green, red, blue)
- */
-export function generateMetroPaths(yearToX, viewboxHeight) {
-  // Define consistent Y positions for each line's corridor
-  const LINE_Y = {
-    tech: viewboxHeight * 0.18,      // Cyan - Top
-    war: viewboxHeight * 0.34,       // Red - Upper middle  
-    population: viewboxHeight * 0.50, // Green - Center
-    philosophy: viewboxHeight * 0.66, // Orange - Lower middle
-    empire: viewboxHeight * 0.82     // Purple - Bottom
-  };
-  
-  // Final convergence point where all lines meet
-  const CONVERGENCE_X = yearToX(2025);
-  const CONVERGENCE_Y = viewboxHeight * 0.15;
-  
-  // 1. BLUE (Tech) - Horizontal line at top, curves up at end
-  const bluePts = [
-    { x: 0, y: LINE_Y.tech },
-    { x: yearToX(-10000), y: LINE_Y.tech },
-    { x: yearToX(-8000), y: LINE_Y.tech },
-    { x: yearToX(-6000), y: LINE_Y.tech },
-    { x: yearToX(-3500), y: LINE_Y.tech },
-    { x: yearToX(-3200), y: LINE_Y.tech },
-    { x: yearToX(-3000), y: LINE_Y.tech },
-    { x: yearToX(-1200), y: LINE_Y.tech },
-    { x: yearToX(800), y: LINE_Y.tech },
-    { x: yearToX(1455), y: LINE_Y.tech },
-    { x: yearToX(1543), y: LINE_Y.tech },
-    { x: yearToX(1712), y: LINE_Y.tech },
-    { x: yearToX(1800), y: LINE_Y.tech },
-    { x: yearToX(1900), y: LINE_Y.tech },
-    { x: yearToX(1950), y: LINE_Y.tech },
-    { x: yearToX(1990), y: LINE_Y.tech },
-    { x: yearToX(2010), y: LINE_Y.tech * 0.8 },
-    { x: CONVERGENCE_X, y: CONVERGENCE_Y },
-    { x: CONVERGENCE_X + 50, y: 0 }
-  ];
-  
-  // 2. RED (War) - Starts later, stays horizontal in its band
-  const redPts = [
-    { x: yearToX(-1200), y: LINE_Y.war },
-    { x: yearToX(476), y: LINE_Y.war },
-    { x: yearToX(793), y: LINE_Y.war },
-    { x: yearToX(1206), y: LINE_Y.war },
-    { x: yearToX(1492), y: LINE_Y.war },
-    { x: yearToX(1789), y: LINE_Y.war },
-    { x: yearToX(1850), y: LINE_Y.war },
-    { x: yearToX(1914), y: LINE_Y.war },
-    { x: yearToX(1945), y: LINE_Y.war },
-    { x: yearToX(1990), y: LINE_Y.war },
-    { x: yearToX(2010), y: LINE_Y.war * 0.85 },
-    { x: CONVERGENCE_X, y: CONVERGENCE_Y + 30 }
-  ];
-  
-  // 3. GREEN (Population) - Center line, stays horizontal
-  const greenPts = [
-    { x: 0, y: LINE_Y.population },
-    { x: yearToX(-10000), y: LINE_Y.population },
-    { x: yearToX(-4000), y: LINE_Y.population },
-    { x: yearToX(-3500), y: LINE_Y.population },
-    { x: yearToX(-500), y: LINE_Y.population },
-    { x: yearToX(100), y: LINE_Y.population },
-    { x: yearToX(476), y: LINE_Y.population },
-    { x: yearToX(1347), y: LINE_Y.population * 1.05 }, // Slight dip for Black Death
-    { x: yearToX(1492), y: LINE_Y.population },
-    { x: yearToX(1800), y: LINE_Y.population },
-    { x: yearToX(1900), y: LINE_Y.population * 0.95 },
-    { x: yearToX(1950), y: LINE_Y.population * 0.85 },
-    { x: yearToX(2000), y: LINE_Y.population * 0.7 },
-    { x: yearToX(2015), y: LINE_Y.population * 0.5 },
-    { x: CONVERGENCE_X, y: CONVERGENCE_Y + 60 }
-  ];
-  
-  // 4. ORANGE (Philosophy) - Lower middle band
-  const orangePts = [
-    { x: yearToX(-10000), y: LINE_Y.philosophy },
-    { x: yearToX(-1750), y: LINE_Y.philosophy },
-    { x: yearToX(-776), y: LINE_Y.philosophy },
-    { x: yearToX(-563), y: LINE_Y.philosophy },
-    { x: yearToX(-500), y: LINE_Y.philosophy },
-    { x: yearToX(0), y: LINE_Y.philosophy },
-    { x: yearToX(529), y: LINE_Y.philosophy },
-    { x: yearToX(800), y: LINE_Y.philosophy },
-    { x: yearToX(1215), y: LINE_Y.philosophy },
-    { x: yearToX(1400), y: LINE_Y.philosophy },
-    { x: yearToX(1687), y: LINE_Y.philosophy },
-    { x: yearToX(1859), y: LINE_Y.philosophy },
-    { x: yearToX(1950), y: LINE_Y.philosophy * 0.9 },
-    { x: yearToX(2000), y: LINE_Y.philosophy * 0.75 },
-    { x: CONVERGENCE_X, y: CONVERGENCE_Y + 90 }
-  ];
-  
-  // 5. PURPLE (Empire) - Bottom band, curves up at end
-  const purplePts = [
-    { x: yearToX(-4000), y: LINE_Y.empire },
-    { x: yearToX(-3500), y: LINE_Y.empire },
-    { x: yearToX(-3300), y: LINE_Y.empire },
-    { x: yearToX(-3100), y: LINE_Y.empire },
-    { x: yearToX(-2600), y: LINE_Y.empire },
-    { x: yearToX(-550), y: LINE_Y.empire },
-    { x: yearToX(-500), y: LINE_Y.empire },
-    { x: yearToX(-336), y: LINE_Y.empire },
-    { x: yearToX(-221), y: LINE_Y.empire },
-    { x: yearToX(100), y: LINE_Y.empire },
-    { x: yearToX(618), y: LINE_Y.empire },
-    { x: yearToX(1206), y: LINE_Y.empire },
-    { x: yearToX(1492), y: LINE_Y.empire },
-    { x: yearToX(1800), y: LINE_Y.empire * 0.95 },
-    { x: yearToX(1914), y: LINE_Y.empire * 0.85 },
-    { x: yearToX(2000), y: LINE_Y.empire * 0.6 },
-    { x: CONVERGENCE_X, y: CONVERGENCE_Y + 120 }
-  ];
-
-  const greenBraided = generateBraidedPath(greenPts);
-
-  return {
-    orange: generateSmoothPath(orangePts),
-    purple: generateSmoothPath(purplePts),
-    green: greenBraided,
-    red: generateSmoothPath(redPts),
-    blue: generateSmoothPath(bluePts),
-    connections: {} // Disable complex connections for cleaner look
-  };
-}
-

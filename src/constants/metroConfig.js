@@ -19,6 +19,7 @@ export const TIMELINE = {
 };
 
 // Line Configuration - Each metro line's visual identity
+// Y positions are evenly spaced for clean visual hierarchy
 export const LINES = {
   Tech: {
     id: 'tech',
@@ -26,7 +27,7 @@ export const LINES = {
     color: '#22d3ee',
     colorDark: '#0e7490',
     colorMid: '#0891b2',
-    yPosition: 0.18,
+    yPosition: 0.20, // Adjusted for even spacing
     description: 'Innovations that shaped human capability'
   },
   War: {
@@ -35,7 +36,7 @@ export const LINES = {
     color: '#ef4444',
     colorDark: '#7f1d1d',
     colorMid: '#dc2626',
-    yPosition: 0.34,
+    yPosition: 0.35, // Adjusted for even spacing
     description: 'Wars and conflicts that altered history'
   },
   Population: {
@@ -44,7 +45,7 @@ export const LINES = {
     color: '#22c55e',
     colorDark: '#14532d',
     colorMid: '#16a34a',
-    yPosition: 0.50,
+    yPosition: 0.50, // Center position
     description: 'The growth and movement of humanity'
   },
   Philosophy: {
@@ -53,7 +54,7 @@ export const LINES = {
     color: '#fbbf24',
     colorDark: '#78350f',
     colorMid: '#f59e0b',
-    yPosition: 0.66,
+    yPosition: 0.65, // Adjusted for even spacing
     description: 'Philosophy, religion, and transformative ideas'
   },
   Empire: {
@@ -62,7 +63,7 @@ export const LINES = {
     color: '#a855f7',
     colorDark: '#4c1d95',
     colorMid: '#7c3aed',
-    yPosition: 0.82,
+    yPosition: 0.80, // Adjusted for even spacing
     description: 'Rise and fall of civilizations'
   }
 };

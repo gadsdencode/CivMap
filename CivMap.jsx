@@ -125,10 +125,12 @@ const CivilizationMetroMap = () => {
   // Focus trap for welcome modal
   useFocusTrap(showWelcome, welcomeRef);
 
-  // Memoized paths - Generated using utility function
+  // Memoized paths - Dynamically generated from station data
+  // We strictly use the 'stations' calculated above to ensure
+  // the lines pass exactly through the station coordinates.
   const paths = useMemo(() => {
-    return generateMetroPaths(yearToX, VIEWBOX_HEIGHT);
-  }, [yearToX]);
+    return generateMetroPaths(yearToX, VIEWBOX_HEIGHT, stations);
+  }, [yearToX, stations]);
 
   // Initialize viewBox on mount - Human-Centric: Show meaningful overview
   useEffect(() => {
@@ -964,7 +966,8 @@ const CivilizationMetroMap = () => {
             />
 
             <MetroLine
-              pathData={paths.green.main}
+              // Handle object structure for braided lines or string for simple lines
+              pathData={typeof paths.green === 'string' ? paths.green : paths.green.main}
               lineConfig={LINES.Population}
               animationProgress={animationProgress}
               isVisible={visibleLines.population}
@@ -1112,7 +1115,7 @@ const CivilizationMetroMap = () => {
                   <path d={paths.blue} fill="none" stroke="#22d3ee" strokeWidth="4" opacity="0.7" />
                 )}
                 {visibleLines.population && (
-                  <path d={paths.green.main} fill="none" stroke="#22c55e" strokeWidth="4" opacity="0.7" />
+                  <path d={typeof paths.green === 'string' ? paths.green : paths.green.main} fill="none" stroke="#22c55e" strokeWidth="4" opacity="0.7" />
                 )}
                 {visibleLines.war && (
                   <path d={paths.red} fill="none" stroke="#ef4444" strokeWidth="4" opacity="0.7" />
