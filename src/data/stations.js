@@ -1,10 +1,31 @@
 /**
  * Station Data
+ * Single source of truth for all historical station data
  * Separated from component for maintainability and potential future API integration
  */
 
-import { LINE_Y_POSITIONS } from '../constants/metroConfig';
+import { LINE_Y_POSITIONS, VIEWBOX } from '../constants/metroConfig';
 import { yearToX } from '../utils/coordinates';
+
+/**
+ * Icon type identifiers mapped to station characteristics
+ * These are resolved to actual JSX icons in the component layer
+ */
+const ICON_TYPES = {
+  USERS: 'users',
+  SETTINGS: 'settings',
+  CASTLE: 'castle',
+  BOOK: 'bookOpen',
+  SKULL: 'skull',
+  ZAP: 'zap',
+  GLOBE: 'globe',
+  CPU: 'cpu',
+  SMARTPHONE: 'smartphone',
+  ATOM: 'atom',
+  GAUGE: 'gauge',
+  PRINTER: 'printer',
+  ALERT: 'alertTriangle'
+};
 
 // Raw station definitions - the historical data
 const STATION_DATA = [
@@ -15,12 +36,14 @@ const STATION_DATA = [
     yearLabel: '10,000 BCE',
     lines: ['Tech', 'Population'],
     significance: 'major',
+    iconType: ICON_TYPES.USERS,
+    iconSize: 'large',
     narrative: {
       visual: "The thin Cyan line (Tech) and the thin Vine (Green) collide and fuse.",
       atmosphere: "The smell of wet earth and grain. A quiet, spacious beginning.",
       insight: "The first permanent structure. 4 Million people. The wanderers settle."
     },
-    details: "Passengers arrive from the Hunter-Gatherer Express. Everyone switches to the Sedentary Line.",
+    details: "Passengers arrive from the Hunter-Gatherer Express. Everyone switches to the Sedentary Line. This is the first permanent structure on the map. Before this, the lines were wandering paths. Now, the Green line begins its upward curve.",
     population: "4 Million"
   },
   {
@@ -30,12 +53,13 @@ const STATION_DATA = [
     yearLabel: '8,000 BCE',
     lines: ['Tech'],
     significance: 'minor',
+    iconType: ICON_TYPES.SETTINGS,
     narrative: {
       visual: "The Blue Line develops new textures. Containers emerge.",
       atmosphere: "The heat of kilns. The transformation of clay.",
       insight: "Storage and preservation. The first manufactured containers."
     },
-    details: "Early pottery enables food storage and cooking.",
+    details: "Early pottery enables food storage and cooking. Technology enables new ways of living.",
     population: "~5 Million"
   },
   {
@@ -45,6 +69,7 @@ const STATION_DATA = [
     yearLabel: '6,000 BCE',
     lines: ['Tech'],
     significance: 'minor',
+    iconType: ICON_TYPES.SETTINGS,
     narrative: {
       visual: "The Blue Line gains a metallic sheen. First metalworking.",
       atmosphere: "The glow of molten copper. The first forges.",
@@ -60,6 +85,7 @@ const STATION_DATA = [
     yearLabel: '4,000 BCE',
     lines: ['Empire', 'Population'],
     significance: 'major',
+    iconType: ICON_TYPES.CASTLE,
     narrative: {
       visual: "The Purple Line begins to form. First cities emerge.",
       atmosphere: "The bustle of urban life. The first markets.",
@@ -69,33 +95,36 @@ const STATION_DATA = [
     population: "~7 Million"
   },
   {
-    id: 'uruk',
-    name: 'Uruk Central',
-    year: -3500,
-    yearLabel: '3,500 BCE',
-    lines: ['Tech', 'Empire', 'Population'],
-    significance: 'hub',
-    narrative: {
-      visual: "The Purple Line emerges. The Blue Line flashes with Writing.",
-      atmosphere: "Dust, clay tablets, bureaucrats tallying grain.",
-      insight: "Civilization 'locks in.' The first 'System Map' drawn by scribes."
-    },
-    details: "The Wheel (3200 BCE) is one stop away—pace accelerates noticeably.",
-    population: "~1 Million"
-  },
-  {
     id: 'egypt',
     name: 'Ancient Egypt',
     year: -3100,
     yearLabel: '3,100 BCE',
     lines: ['Empire', 'Tech'],
     significance: 'major',
+    iconType: ICON_TYPES.CASTLE,
     narrative: {
       visual: "The Purple Line solidifies. Pyramids rise along the tracks.",
       atmosphere: "The weight of stone. The flow of the Nile.",
-      insight: "First great empire. Monumental architecture."
+      insight: "First great empire. Monumental architecture defines the landscape."
     },
-    details: "Unification of Upper and Lower Egypt. First pharaonic dynasty.",
+    details: "Unification of Upper and Lower Egypt. The first pharaonic dynasty.",
+    population: "~1 Million"
+  },
+  {
+    id: 'uruk',
+    name: 'Uruk Central',
+    year: -3500,
+    yearLabel: '3,500 BCE',
+    lines: ['Tech', 'Empire', 'Population'],
+    significance: 'hub',
+    iconType: ICON_TYPES.CASTLE,
+    iconSize: 'large',
+    narrative: {
+      visual: "The Purple Line (Empire) emerges from the ground here. The Blue Line flashes brightly with the invention of Writing.",
+      atmosphere: "Dust, clay tablets, and the sound of bureaucrats tallying grain.",
+      insight: "Civilization 'locks in.' The lines become rigid. We see the first 'System Map' being drawn by scribes."
+    },
+    details: "The Wheel (3200 BCE) station is just one stop away—the pace of the train accelerates noticeably after this station.",
     population: "~1 Million"
   },
   {
@@ -105,12 +134,13 @@ const STATION_DATA = [
     yearLabel: '3,300 BCE',
     lines: ['Empire', 'Tech'],
     significance: 'major',
+    iconType: ICON_TYPES.CASTLE,
     narrative: {
       visual: "The Purple Line branches. Planned cities emerge.",
-      atmosphere: "Grid streets. Flowing water systems.",
-      insight: "Urban planning reaches new heights."
+      atmosphere: "The order of grid streets. The flow of water systems.",
+      insight: "Urban planning reaches new heights. The map shows intentional design."
     },
-    details: "Harappa and Mohenjo-Daro. Advanced city planning.",
+    details: "Harappa and Mohenjo-Daro. Advanced city planning and drainage.",
     population: "~1 Million"
   },
   {
@@ -120,10 +150,11 @@ const STATION_DATA = [
     yearLabel: '3,200 BCE',
     lines: ['Tech'],
     significance: 'major',
+    iconType: ICON_TYPES.SETTINGS,
     narrative: {
       visual: "The Blue Line accelerates. First mechanical advantage.",
       atmosphere: "The creak of wooden wheels on stone roads.",
-      insight: "Mobility transforms civilization."
+      insight: "Mobility transforms civilization. The train picks up speed."
     },
     details: "One stop from Uruk Central. The acceleration begins.",
     population: "~1.5 Million"
@@ -135,12 +166,13 @@ const STATION_DATA = [
     yearLabel: '3,000 BCE',
     lines: ['Tech', 'War'],
     significance: 'major',
+    iconType: ICON_TYPES.SETTINGS,
     narrative: {
       visual: "The Blue Line strengthens. Alloy technology emerges.",
-      atmosphere: "The glow of bronze. Stronger weapons.",
-      insight: "Alloys create superior materials."
+      atmosphere: "The glow of bronze. The clang of stronger weapons.",
+      insight: "Alloys create superior materials. Technology compounds."
     },
-    details: "Bronze smelting spreads. Warfare transforms.",
+    details: "Bronze smelting spreads. Stronger tools and weapons transform warfare.",
     population: "~14 Million"
   },
   {
@@ -150,12 +182,13 @@ const STATION_DATA = [
     yearLabel: '2,600 BCE',
     lines: ['Empire', 'Tech'],
     significance: 'major',
+    iconType: ICON_TYPES.CASTLE,
     narrative: {
-      visual: "The Purple Line reaches skyward.",
+      visual: "The Purple Line reaches skyward. Monumental architecture.",
       atmosphere: "The weight of eternity. Stone against sky.",
-      insight: "Human ambition made permanent."
+      insight: "Human ambition made permanent. The map shows what we can build."
     },
-    details: "Pyramids of Giza. Engineering marvels.",
+    details: "Pyramids of Giza. Engineering marvels that define an era.",
     population: "~27 Million"
   },
   {
@@ -165,12 +198,13 @@ const STATION_DATA = [
     yearLabel: '1,750 BCE',
     lines: ['Philosophy', 'Empire'],
     significance: 'major',
+    iconType: ICON_TYPES.BOOK,
     narrative: {
       visual: "The Orange Line solidifies. Written law emerges.",
-      atmosphere: "The weight of justice. Permanence of rules.",
-      insight: "Law becomes codified."
+      atmosphere: "The weight of justice. The permanence of rules.",
+      insight: "Law becomes codified. The map shows the structure of order."
     },
-    details: "First comprehensive legal code.",
+    details: "First comprehensive legal code. Written laws govern society.",
     population: "~50 Million"
   },
   {
@@ -180,12 +214,13 @@ const STATION_DATA = [
     yearLabel: '1,200 BCE',
     lines: ['Tech', 'War'],
     significance: 'major',
+    iconType: ICON_TYPES.SETTINGS,
     narrative: {
-      visual: "The Blue Line strengthens. Metalworking transforms.",
-      atmosphere: "Ring of hammer on anvil. Glow of forges.",
-      insight: "Harder materials enable new possibilities."
+      visual: "The Blue Line strengthens. Metalworking transforms tools and weapons.",
+      atmosphere: "The ring of hammer on anvil. The glow of forges.",
+      insight: "Harder materials enable new possibilities. The tracks become more durable."
     },
-    details: "Tools and weapons become more effective.",
+    details: "A major technological leap. Tools and weapons become more effective.",
     population: "~50 Million"
   },
   {
@@ -195,12 +230,13 @@ const STATION_DATA = [
     yearLabel: '776 BCE',
     lines: ['Philosophy', 'Population'],
     significance: 'minor',
+    iconType: ICON_TYPES.USERS,
     narrative: {
-      visual: "The Orange Line celebrates.",
-      atmosphere: "The roar of crowds. Pursuit of excellence.",
-      insight: "Competition and culture unite."
+      visual: "The Orange Line celebrates. Human achievement becomes spectacle.",
+      atmosphere: "The roar of crowds. The pursuit of excellence.",
+      insight: "Competition and culture unite. The map shows shared human values."
     },
-    details: "First recorded Olympic Games.",
+    details: "First recorded Olympic Games. Cultural exchange through competition.",
     population: "~100 Million"
   },
   {
@@ -210,12 +246,13 @@ const STATION_DATA = [
     yearLabel: '563 BCE',
     lines: ['Philosophy'],
     significance: 'major',
+    iconType: ICON_TYPES.BOOK,
     narrative: {
       visual: "The Orange Line deepens. Eastern philosophy emerges.",
-      atmosphere: "The silence of meditation.",
-      insight: "Philosophy offers new paths."
+      atmosphere: "The silence of meditation. The search for truth.",
+      insight: "Philosophy offers new paths. The map shows alternative routes."
     },
-    details: "Birth of Siddhartha Gautama. Buddhism begins.",
+    details: "Birth of Siddhartha Gautama. Buddhism and new philosophical traditions.",
     population: "~100 Million"
   },
   {
@@ -225,12 +262,13 @@ const STATION_DATA = [
     yearLabel: '551 BCE',
     lines: ['Philosophy', 'Empire'],
     significance: 'major',
+    iconType: ICON_TYPES.BOOK,
     narrative: {
-      visual: "The Orange Line branches eastward.",
-      atmosphere: "The wisdom of ages.",
-      insight: "Moral philosophy shapes civilization."
+      visual: "The Orange Line branches eastward. Ethical systems form.",
+      atmosphere: "The wisdom of ages. The structure of society.",
+      insight: "Moral philosophy shapes civilization. The map shows cultural foundations."
     },
-    details: "Confucianism shapes Chinese civilization.",
+    details: "Birth of Confucius. Confucianism shapes Chinese civilization.",
     population: "~100 Million"
   },
   {
@@ -240,12 +278,13 @@ const STATION_DATA = [
     yearLabel: '550 BCE',
     lines: ['Empire'],
     significance: 'major',
+    iconType: ICON_TYPES.CASTLE,
     narrative: {
-      visual: "The Purple Line expands dramatically.",
-      atmosphere: "The scale of conquest.",
-      insight: "Empire reaches new scale."
+      visual: "The Purple Line expands dramatically. First super-empire.",
+      atmosphere: "The scale of conquest. The unity of diverse peoples.",
+      insight: "Empire reaches new scale. The map shows unprecedented territory."
     },
-    details: "Achaemenid Empire under Cyrus the Great.",
+    details: "Achaemenid Empire under Cyrus the Great. First truly global empire.",
     population: "~100 Million"
   },
   {
@@ -255,12 +294,13 @@ const STATION_DATA = [
     yearLabel: '500 BCE',
     lines: ['Empire', 'Philosophy'],
     significance: 'hub',
+    iconType: ICON_TYPES.CASTLE,
     narrative: {
-      visual: "The Purple Line expands. Great empires rise.",
-      atmosphere: "Marching legions. Marble cities.",
-      insight: "Empires become the dominant structure."
+      visual: "The Purple Line expands. Great empires rise (Rome, Persia, China).",
+      atmosphere: "The sound of marching legions. The grandeur of marble cities.",
+      insight: "Empires become the dominant structure. The map shows vast territories."
     },
-    details: "Rome, Persia, China create global empires.",
+    details: "Rome, Persia, and China create the first truly global empires.",
     population: "~100 Million"
   },
   {
@@ -270,12 +310,13 @@ const STATION_DATA = [
     yearLabel: '336 BCE',
     lines: ['Empire', 'Philosophy'],
     significance: 'major',
+    iconType: ICON_TYPES.CASTLE,
     narrative: {
-      visual: "The Purple Line stretches to breaking.",
-      atmosphere: "The speed of conquest. Fusion of cultures.",
-      insight: "Empire reaches geographic limits."
+      visual: "The Purple Line stretches to breaking. Empire at its limit.",
+      atmosphere: "The speed of conquest. The fusion of cultures.",
+      insight: "Empire reaches its geographic limits. The map shows the edge of possibility."
     },
-    details: "Hellenistic culture spreads across continents.",
+    details: "Alexander's conquests. Hellenistic culture spreads across continents.",
     population: "~150 Million"
   },
   {
@@ -285,12 +326,13 @@ const STATION_DATA = [
     yearLabel: '221 BCE',
     lines: ['Empire', 'Tech'],
     significance: 'major',
+    iconType: ICON_TYPES.CASTLE,
     narrative: {
-      visual: "The Purple Line consolidates in the East.",
-      atmosphere: "The weight of unity. Great Wall begins.",
-      insight: "China unifies."
+      visual: "The Purple Line consolidates in the East. Unified China.",
+      atmosphere: "The weight of unity. The Great Wall begins.",
+      insight: "China unifies. The map shows a new power center."
     },
-    details: "Qin Shi Huang unifies China. Standardization.",
+    details: "Qin Shi Huang unifies China. Standardization and centralization.",
     population: "~200 Million"
   },
   {
@@ -300,12 +342,13 @@ const STATION_DATA = [
     yearLabel: '509 BCE',
     lines: ['Empire', 'Philosophy'],
     significance: 'major',
+    iconType: ICON_TYPES.CASTLE,
     narrative: {
-      visual: "The Purple Line gains structure.",
-      atmosphere: "Balance of power. Rule of law.",
-      insight: "New form of governance."
+      visual: "The Purple Line gains structure. Republic emerges.",
+      atmosphere: "The balance of power. The rule of law.",
+      insight: "New form of governance. The map shows political innovation."
     },
-    details: "Roman Republic established.",
+    details: "Roman Republic established. New model of government.",
     population: "~100 Million"
   },
   {
@@ -315,12 +358,13 @@ const STATION_DATA = [
     yearLabel: '1 CE',
     lines: ['Philosophy'],
     significance: 'major',
+    iconType: ICON_TYPES.BOOK,
     narrative: {
-      visual: "The Orange Line transforms.",
-      atmosphere: "The birth of hope. Spread of faith.",
-      insight: "Religious revolution."
+      visual: "The Orange Line transforms. New spiritual path emerges.",
+      atmosphere: "The birth of hope. The spread of faith.",
+      insight: "Religious revolution. The map shows a new philosophical direction."
     },
-    details: "Christianity begins to spread.",
+    details: "Birth of Jesus. Christianity begins to spread.",
     population: "~200 Million"
   },
   {
@@ -330,12 +374,13 @@ const STATION_DATA = [
     yearLabel: '100 CE',
     lines: ['Empire', 'Tech'],
     significance: 'major',
+    iconType: ICON_TYPES.CASTLE,
     narrative: {
       visual: "The Purple Line reaches new heights in the East.",
-      atmosphere: "The Silk Road. Exchange of goods and ideas.",
-      insight: "China at its peak."
+      atmosphere: "The Silk Road. The exchange of goods and ideas.",
+      insight: "China at its peak. Trade routes connect civilizations."
     },
-    details: "Han Dynasty golden age. Silk Road flourishes.",
+    details: "Han Dynasty golden age. Silk Road trade flourishes.",
     population: "~250 Million"
   },
   {
@@ -345,12 +390,13 @@ const STATION_DATA = [
     yearLabel: '476 CE',
     lines: ['War', 'Empire'],
     significance: 'major',
+    iconType: ICON_TYPES.SKULL,
     narrative: {
-      visual: "The Purple Line fractures. The Red Line surges.",
-      atmosphere: "Collapse of order. Migration of peoples.",
-      insight: "Empires fall, but tracks remain."
+      visual: "The Purple Line fractures. The Red Line surges. The map reorganizes.",
+      atmosphere: "The collapse of order. The migration of peoples.",
+      insight: "Empires fall, but the tracks remain. New stations emerge from the ruins."
     },
-    details: "Western Roman Empire falls. Europe redraws.",
+    details: "The Western Roman Empire falls. The map of Europe redraws itself.",
     population: "~200 Million"
   },
   {
@@ -360,12 +406,13 @@ const STATION_DATA = [
     yearLabel: '529 CE',
     lines: ['Philosophy', 'Empire'],
     significance: 'minor',
+    iconType: ICON_TYPES.BOOK,
     narrative: {
-      visual: "The Orange Line codifies.",
-      atmosphere: "Weight of legal tradition.",
-      insight: "Legal systems formalize."
+      visual: "The Orange Line codifies. Law becomes systematic.",
+      atmosphere: "The weight of legal tradition. The structure of justice.",
+      insight: "Legal systems formalize. The map shows the framework of order."
     },
-    details: "Roman law preserved and systematized.",
+    details: "Justinian's Code. Roman law preserved and systematized.",
     population: "~200 Million"
   },
   {
@@ -375,12 +422,13 @@ const STATION_DATA = [
     yearLabel: '618 CE',
     lines: ['Empire', 'Philosophy'],
     significance: 'major',
+    iconType: ICON_TYPES.CASTLE,
     narrative: {
-      visual: "The Purple Line flourishes in the East.",
-      atmosphere: "Prosperity. Poetry flows.",
-      insight: "China's cultural peak."
+      visual: "The Purple Line flourishes in the East. Golden age.",
+      atmosphere: "The prosperity of peace. The flow of poetry.",
+      insight: "China's cultural peak. The map shows artistic achievement."
     },
-    details: "Golden age of Chinese civilization.",
+    details: "Tang Dynasty begins. Golden age of Chinese civilization.",
     population: "~250 Million"
   },
   {
@@ -390,12 +438,13 @@ const STATION_DATA = [
     yearLabel: '800 CE',
     lines: ['Tech', 'Philosophy'],
     significance: 'major',
+    iconType: ICON_TYPES.BOOK,
     narrative: {
-      visual: "The Blue Line brightens in the East.",
-      atmosphere: "Libraries. Ideas across continents.",
-      insight: "Science and mathematics advance."
+      visual: "The Blue Line brightens in the East. Knowledge flows along new routes.",
+      atmosphere: "The scent of libraries. The exchange of ideas across continents.",
+      insight: "Science and mathematics advance. The map shows new intellectual centers."
     },
-    details: "Baghdad becomes hub of learning.",
+    details: "Baghdad becomes a hub of learning. Knowledge spreads along trade routes.",
     population: "~250 Million"
   },
   {
@@ -405,12 +454,13 @@ const STATION_DATA = [
     yearLabel: '850 CE',
     lines: ['Tech', 'War'],
     significance: 'major',
+    iconType: ICON_TYPES.SETTINGS,
     narrative: {
-      visual: "The Blue Line gains explosive power.",
-      atmosphere: "Sulfur. Flash of fire.",
-      insight: "Chemical power harnessed."
+      visual: "The Blue Line gains explosive power. New force enters the map.",
+      atmosphere: "The smell of sulfur. The flash of fire.",
+      insight: "Chemical power harnessed. Warfare transforms forever."
     },
-    details: "Gunpowder invented in China.",
+    details: "Gunpowder invented in China. Will transform warfare and technology.",
     population: "~250 Million"
   },
   {
@@ -420,12 +470,13 @@ const STATION_DATA = [
     yearLabel: '793 CE',
     lines: ['War', 'Tech'],
     significance: 'major',
+    iconType: ICON_TYPES.SKULL,
     narrative: {
-      visual: "The Red Line surges northward.",
-      atmosphere: "Sound of oars. Fear of the unknown.",
-      insight: "Exploration through conquest."
+      visual: "The Red Line surges northward. Raiders reshape the map.",
+      atmosphere: "The sound of oars. The fear of the unknown.",
+      insight: "Exploration through conquest. The map expands northward."
     },
-    details: "Viking raids begin. Exploration across North Atlantic.",
+    details: "Viking raids begin. Exploration and trade across the North Atlantic.",
     population: "~250 Million"
   },
   {
@@ -435,12 +486,13 @@ const STATION_DATA = [
     yearLabel: '1215 CE',
     lines: ['Philosophy', 'Empire'],
     significance: 'major',
+    iconType: ICON_TYPES.BOOK,
     narrative: {
-      visual: "The Orange Line constrains power.",
-      atmosphere: "Weight of parchment. Limit of kings.",
-      insight: "Power becomes limited."
+      visual: "The Orange Line constrains power. Rights emerge.",
+      atmosphere: "The weight of parchment. The limit of kings.",
+      insight: "Power becomes limited. The map shows new political structures."
     },
-    details: "Foundation of constitutional law.",
+    details: "Magna Carta signed. Foundation of constitutional law.",
     population: "~400 Million"
   },
   {
@@ -450,12 +502,13 @@ const STATION_DATA = [
     yearLabel: '1206 CE',
     lines: ['Empire', 'War'],
     significance: 'major',
+    iconType: ICON_TYPES.CASTLE,
     narrative: {
-      visual: "The Purple Line explodes.",
-      atmosphere: "Thunder of hooves. Unity of the steppe.",
-      insight: "Empire reaches unprecedented scale."
+      visual: "The Purple Line explodes. Largest land empire.",
+      atmosphere: "The thunder of hooves. The unity of the steppe.",
+      insight: "Empire reaches unprecedented scale. The map shows continental unity."
     },
-    details: "Genghis Khan. Largest contiguous empire.",
+    details: "Genghis Khan unites Mongols. Largest contiguous empire in history.",
     population: "~400 Million"
   },
   {
@@ -465,13 +518,14 @@ const STATION_DATA = [
     yearLabel: '1347 CE',
     lines: ['Population', 'War'],
     significance: 'crisis',
+    iconType: ICON_TYPES.SKULL,
     narrative: {
-      visual: "The Green Line plummets. Red spreads.",
-      atmosphere: "Silence of empty streets. Weight of loss.",
-      insight: "Population crashes. Fragility exposed."
+      visual: "The Green Line plummets. The Red Line of disease spreads.",
+      atmosphere: "The silence of empty streets. The weight of loss.",
+      insight: "Population crashes. The map shows the fragility of civilization."
     },
-    details: "30-50% of Europe dies.",
-    population: "~350M → ~250M"
+    details: "Black Death arrives in Europe. 30-50% of population dies.",
+    population: "~350 Million (then ~250 Million)"
   },
   {
     id: 'renaissance',
@@ -480,13 +534,30 @@ const STATION_DATA = [
     yearLabel: '1400 CE',
     lines: ['Philosophy', 'Tech'],
     significance: 'major',
+    iconType: ICON_TYPES.BOOK,
     narrative: {
-      visual: "The Orange Line shifts. Humanism emerges.",
-      atmosphere: "Paint and marble. New ideas.",
-      insight: "The past illuminates the future."
+      visual: "The Orange Line shifts. Humanism emerges. The map rediscovers itself.",
+      atmosphere: "The smell of paint and marble. The sound of new ideas.",
+      insight: "The past illuminates the future. The map becomes a work of art."
     },
-    details: "Europe rediscovers classical knowledge.",
+    details: "Europe rediscovers classical knowledge. The Orange Line shifts toward humanism.",
     population: "~350 Million"
+  },
+  {
+    id: 'gutenberg',
+    name: 'Gutenberg Bible',
+    year: 1455,
+    yearLabel: '1455 CE',
+    lines: ['Tech', 'Philosophy'],
+    significance: 'major',
+    iconType: ICON_TYPES.PRINTER,
+    narrative: {
+      visual: "The Blue Line multiplies. Knowledge becomes mass-produced.",
+      atmosphere: "The smell of ink. The weight of books.",
+      insight: "Information revolution begins. The map becomes reproducible."
+    },
+    details: "First major book printed with movable type. Information age begins.",
+    population: "~400 Million"
   },
   {
     id: 'printing',
@@ -495,28 +566,31 @@ const STATION_DATA = [
     yearLabel: '1440 CE',
     lines: ['Tech', 'Philosophy'],
     significance: 'major',
+    iconType: ICON_TYPES.PRINTER,
     narrative: {
-      visual: "The Blue Line brightens. Knowledge reproducible.",
-      atmosphere: "Ink and paper. Mechanical rhythm.",
-      insight: "Information spreads exponentially."
+      visual: "The Blue Line brightens. Knowledge becomes reproducible.",
+      atmosphere: "The smell of ink and paper. The mechanical rhythm of the press.",
+      insight: "Information spreads exponentially. The map of the world becomes accessible to all."
     },
-    details: "Gutenberg. Maps become accessible to all.",
+    details: "Just prior to the Columbian Exchange. Ensures maps of the new world are distributed to everyone.",
     population: "~400 Million"
   },
   {
     id: 'columbian',
-    name: 'Columbian Exchange',
+    name: 'Columbian Exchange Terminal',
     year: 1492,
     yearLabel: '1492 CE',
     lines: ['Empire', 'Population', 'Tech'],
     significance: 'hub',
+    iconType: ICON_TYPES.GLOBE,
+    iconSize: 'large',
     narrative: {
-      visual: "A chaotic knot. Empires wrap the globe.",
+      visual: "A chaotic knot. The Purple Line (Empires) splits and wraps around the entire globe (Spain/Portugal). The Green Line (Population) suffers a glitch—a dip due to disease in the Americas—before surging upward.",
       atmosphere: "Salt water, gold, and gunpowder.",
-      insight: "The 'World Map' connects. East and West become one grid."
+      insight: "The 'World Map' connects. Previously, the Metro had two separate systems (East and West). Now, they are one grid."
     },
-    details: "Two separate metro systems become one.",
-    population: "~500M (dip then surge)"
+    details: "The Printing Press station just prior ensures that maps of this new world are distributed to everyone.",
+    population: "~500 Million (dip then surge)"
   },
   {
     id: 'scientific-rev',
@@ -525,12 +599,13 @@ const STATION_DATA = [
     yearLabel: '1543 CE',
     lines: ['Tech', 'Philosophy'],
     significance: 'major',
+    iconType: ICON_TYPES.BOOK,
     narrative: {
-      visual: "The Blue Line accelerates.",
-      atmosphere: "Precision of measurement. Clarity of reason.",
-      insight: "Science becomes method."
+      visual: "The Blue Line accelerates. Observation replaces authority.",
+      atmosphere: "The precision of measurement. The clarity of reason.",
+      insight: "Science becomes method. The map shows systematic discovery."
     },
-    details: "Copernicus. Scientific method emerges.",
+    details: "Copernicus publishes On the Revolutions. Scientific method emerges.",
     population: "~500 Million"
   },
   {
@@ -540,12 +615,13 @@ const STATION_DATA = [
     yearLabel: '1687 CE',
     lines: ['Philosophy', 'Tech'],
     significance: 'major',
+    iconType: ICON_TYPES.BOOK,
     narrative: {
-      visual: "The Orange Line brightens. Reason illuminates.",
-      atmosphere: "Clarity of thought. Power of ideas.",
-      insight: "Philosophy becomes systematic."
+      visual: "The Orange Line brightens. Reason illuminates the map.",
+      atmosphere: "The clarity of thought. The power of ideas.",
+      insight: "Philosophy becomes systematic. The map shows intellectual revolution."
     },
-    details: "Newton's Principia. Age of Reason.",
+    details: "Newton's Principia. Age of Reason begins.",
     population: "~600 Million"
   },
   {
@@ -555,12 +631,13 @@ const STATION_DATA = [
     yearLabel: '1712 CE',
     lines: ['Tech'],
     significance: 'major',
+    iconType: ICON_TYPES.GAUGE,
     narrative: {
-      visual: "The Blue Line gains power.",
-      atmosphere: "Hiss of steam. Rhythm of pistons.",
-      insight: "Energy harnessed."
+      visual: "The Blue Line gains power. Mechanical force emerges.",
+      atmosphere: "The hiss of steam. The rhythm of pistons.",
+      insight: "Energy harnessed. The map shows new sources of power."
     },
-    details: "Newcomen's steam engine.",
+    details: "Newcomen's steam engine. First practical steam power.",
     population: "~650 Million"
   },
   {
@@ -570,12 +647,13 @@ const STATION_DATA = [
     yearLabel: '1769 CE',
     lines: ['Tech'],
     significance: 'major',
+    iconType: ICON_TYPES.GAUGE,
     narrative: {
-      visual: "The Blue Line transforms into steel rails.",
-      atmosphere: "Steam, metal, rhythm of industry.",
-      insight: "Mechanical power multiplies capability."
+      visual: "The Blue Line transforms into steel rails. Steam power emerges.",
+      atmosphere: "The hiss of steam, the clank of metal, the rhythm of industry.",
+      insight: "Mechanical power multiplies human capability. The train gains its engine."
     },
-    details: "Power for Industrial Grand Central ahead.",
+    details: "Provides the power for the Industrial Grand Central station ahead.",
     population: "~750 Million"
   },
   {
@@ -585,12 +663,13 @@ const STATION_DATA = [
     yearLabel: '1789 CE',
     lines: ['War', 'Philosophy', 'Empire'],
     significance: 'major',
+    iconType: ICON_TYPES.SKULL,
     narrative: {
-      visual: "The Red Line surges. Purple fractures.",
-      atmosphere: "Cry of revolution. Fall of old order.",
-      insight: "Political revolution."
+      visual: "The Red Line surges. The Purple Line fractures. Liberty emerges.",
+      atmosphere: "The cry of revolution. The fall of the old order.",
+      insight: "Political revolution. The map shows new forms of governance."
     },
-    details: "Age of revolutions starts.",
+    details: "French Revolution begins. Age of revolutions starts.",
     population: "~800 Million"
   },
   {
@@ -600,12 +679,14 @@ const STATION_DATA = [
     yearLabel: '1800 CE',
     lines: ['Tech', 'Population', 'Philosophy'],
     significance: 'hub',
+    iconType: ICON_TYPES.ZAP,
+    iconSize: 'large',
     narrative: {
-      visual: "Blue becomes steel rails. Green goes vertical. Orange shifts from Faith to Reason.",
-      atmosphere: "Coal smoke, piston beats, roar of the masses.",
-      insight: "For the first time, Tech moves faster than Empire. The train moves so fast, scenery blurs."
+      visual: "The Blue Line turns into steel rails and emits steam. The Green Line goes vertical (hitting 1 Billion). The Orange Line shifts from Faith to Reason (Secular Rights).",
+      atmosphere: "Coal smoke, piston beats, and the roar of the masses.",
+      insight: "For the first time, the 'Tech' line moves faster than the 'Empire' line. The train is now moving so fast that the scenery blurs."
     },
-    details: "Watt's Engine provides power. 1 Billion humans.",
+    details: "Watt's Engine (1769) provides the power. The Orange Line shifts from Faith to Reason.",
     population: "1 Billion"
   },
   {
@@ -615,12 +696,13 @@ const STATION_DATA = [
     yearLabel: '1825 CE',
     lines: ['Tech'],
     significance: 'major',
+    iconType: ICON_TYPES.SETTINGS,
     narrative: {
-      visual: "The Blue Line becomes literal rails.",
-      atmosphere: "Rhythm of wheels. Speed of connection.",
-      insight: "Transportation revolution."
+      visual: "The Blue Line becomes literal rails. Distance collapses.",
+      atmosphere: "The rhythm of wheels. The speed of connection.",
+      insight: "Transportation revolution. The map shrinks through speed."
     },
-    details: "First public railway.",
+    details: "First public railway. Transportation transforms civilization.",
     population: "~1 Billion"
   },
   {
@@ -630,12 +712,13 @@ const STATION_DATA = [
     yearLabel: '1844 CE',
     lines: ['Tech'],
     significance: 'major',
+    iconType: ICON_TYPES.ZAP,
     narrative: {
-      visual: "The Blue Line becomes instant.",
-      atmosphere: "Click of keys. Pulse of messages.",
-      insight: "Communication revolution."
+      visual: "The Blue Line becomes instant. Information at light speed.",
+      atmosphere: "The click of keys. The pulse of messages.",
+      insight: "Communication revolution. The map becomes real-time."
     },
-    details: "First telegraph message. Instant communication.",
+    details: "First telegraph message. Instant long-distance communication.",
     population: "~1.2 Billion"
   },
   {
@@ -645,12 +728,13 @@ const STATION_DATA = [
     yearLabel: '1859 CE',
     lines: ['Philosophy', 'Tech'],
     significance: 'major',
+    iconType: ICON_TYPES.BOOK,
     narrative: {
-      visual: "The Orange Line shifts.",
-      atmosphere: "Weight of evidence. Shift of perspective.",
-      insight: "Scientific revolution in biology."
+      visual: "The Orange Line shifts. Understanding of life transforms.",
+      atmosphere: "The weight of evidence. The shift of perspective.",
+      insight: "Scientific revolution in biology. The map shows new understanding."
     },
-    details: "Evolution theory emerges.",
+    details: "Darwin publishes Origin of Species. Evolution theory emerges.",
     population: "~1.3 Billion"
   },
   {
@@ -660,12 +744,13 @@ const STATION_DATA = [
     yearLabel: '1914 CE',
     lines: ['War', 'Tech'],
     significance: 'crisis',
+    iconType: ICON_TYPES.SKULL,
     narrative: {
-      visual: "The Red Line engulfs the map.",
-      atmosphere: "Roar of artillery. Mud of trenches.",
-      insight: "War becomes industrial."
+      visual: "The Red Line engulfs the map. Industrial war emerges.",
+      atmosphere: "The roar of artillery. The mud of trenches.",
+      insight: "War becomes industrial. The map shows total conflict."
     },
-    details: "First industrial-scale global war.",
+    details: "World War I begins. First industrial-scale global war.",
     population: "~1.8 Billion"
   },
   {
@@ -675,13 +760,15 @@ const STATION_DATA = [
     yearLabel: '1914–1945',
     lines: ['War', 'Tech', 'Empire', 'Philosophy'],
     significance: 'crisis',
+    iconType: ICON_TYPES.SKULL,
+    iconSize: 'large',
     narrative: {
-      visual: "The map is scorched. Red bleeds over everything. Green wavers. Purple fractures.",
-      atmosphere: "Static, sirens, blinding flash of Los Alamos.",
-      insight: "The Atomic Station: Blue becomes dangerous. Existential threat."
+      visual: "The map is scorched. The Red Line (War) bleeds over everything, obscuring the tracks. The Green Line wavers (70M dead). The Purple Line fractures (British Empire falls) and consolidates into two massive blocks (USA/USSR).",
+      atmosphere: "Static, sirens, and the blinding flash of Los Alamos (1945).",
+      insight: "The Atomic Station: The Blue Line becomes dangerous. It's no longer just a tool; it's an existential threat."
     },
-    details: "70M dead. Empire consolidates into USA/USSR blocks. Passengers leave looking over shoulders.",
-    population: "~2.5B (70M lost)"
+    details: "Existentialism (Orange): Passengers leave this station looking over their shoulders, questioning the nature of the ride. Green line wavers (70M dead). Empire consolidates into blocks.",
+    population: "~2.5 Billion (70M lost)"
   },
   {
     id: 'penicillin',
@@ -690,12 +777,13 @@ const STATION_DATA = [
     yearLabel: '1928 CE',
     lines: ['Tech', 'Population'],
     significance: 'major',
+    iconType: ICON_TYPES.SETTINGS,
     narrative: {
-      visual: "The Blue Line heals.",
-      atmosphere: "Hope of cure. Defeat of disease.",
-      insight: "Medical revolution."
+      visual: "The Blue Line heals. Medicine transforms.",
+      atmosphere: "The hope of cure. The defeat of disease.",
+      insight: "Medical revolution. The map shows longer, healthier lives."
     },
-    details: "Antibiotic age begins.",
+    details: "Penicillin discovered. Antibiotic age begins.",
     population: "~2 Billion"
   },
   {
@@ -705,12 +793,13 @@ const STATION_DATA = [
     yearLabel: '1945 CE',
     lines: ['Tech', 'War'],
     significance: 'crisis',
+    iconType: ICON_TYPES.ATOM,
     narrative: {
-      visual: "The Blue Line becomes a weapon. Blinding flash.",
-      atmosphere: "Silence after explosion. Weight of infinite power.",
-      insight: "Technology reaches self-destruction. Blue is no longer just progress—it's a choice."
+      visual: "The Blue Line becomes a weapon. A blinding flash illuminates the map.",
+      atmosphere: "The silence after the explosion. The weight of infinite power.",
+      insight: "Technology reaches the point of self-destruction. The Blue Line is no longer just progress—it's a choice between creation and annihilation."
     },
-    details: "Los Alamos. Blue becomes existential threat.",
+    details: "Los Alamos. The Blue Line becomes an existential threat. Passengers question the ride.",
     population: "~2.5 Billion"
   },
   {
@@ -720,12 +809,13 @@ const STATION_DATA = [
     yearLabel: '1953 CE',
     lines: ['Tech', 'Philosophy'],
     significance: 'major',
+    iconType: ICON_TYPES.ATOM,
     narrative: {
-      visual: "The Blue Line reveals life's code.",
-      atmosphere: "Elegance of the helix. Code of existence.",
-      insight: "Life understood at molecular level."
+      visual: "The Blue Line reveals life's code. Biology becomes information.",
+      atmosphere: "The elegance of the double helix. The code of existence.",
+      insight: "Life understood at molecular level. The map shows the code of life."
     },
-    details: "Genetic age begins.",
+    details: "DNA structure discovered. Genetic age begins.",
     population: "~2.7 Billion"
   },
   {
@@ -735,12 +825,13 @@ const STATION_DATA = [
     yearLabel: '1957 CE',
     lines: ['Tech'],
     significance: 'major',
+    iconType: ICON_TYPES.ZAP,
     narrative: {
-      visual: "The Blue Line escapes Earth.",
-      atmosphere: "Silence of space. Beep of satellites.",
-      insight: "Humanity reaches beyond Earth."
+      visual: "The Blue Line escapes Earth. The map expands beyond the planet.",
+      atmosphere: "The silence of space. The beep of satellites.",
+      insight: "Humanity reaches beyond Earth. The map shows new frontiers."
     },
-    details: "Sputnik. Space age begins.",
+    details: "Sputnik launched. Space age begins.",
     population: "~2.8 Billion"
   },
   {
@@ -750,12 +841,13 @@ const STATION_DATA = [
     yearLabel: '1969 CE',
     lines: ['Tech'],
     significance: 'major',
+    iconType: ICON_TYPES.CPU,
     narrative: {
-      visual: "The Blue Line networks.",
-      atmosphere: "Pulse of data. Birth of networks.",
-      insight: "Networking begins."
+      visual: "The Blue Line networks. Digital connections form.",
+      atmosphere: "The pulse of data. The birth of networks.",
+      insight: "Networking begins. The map shows digital connections."
     },
-    details: "Internet age begins.",
+    details: "ARPANET first message. Internet age begins.",
     population: "~3.6 Billion"
   },
   {
@@ -765,12 +857,13 @@ const STATION_DATA = [
     yearLabel: '1977 CE',
     lines: ['Tech'],
     significance: 'major',
+    iconType: ICON_TYPES.CPU,
     narrative: {
-      visual: "The Blue Line becomes personal.",
-      atmosphere: "Glow of screens. Power in every home.",
-      insight: "Computing becomes accessible."
+      visual: "The Blue Line becomes personal. Computing democratizes.",
+      atmosphere: "The glow of screens. The power in every home.",
+      insight: "Computing becomes accessible. The map shows personal technology."
     },
-    details: "Apple II, Commodore PET.",
+    details: "Apple II and Commodore PET. Personal computing revolution.",
     population: "~4.2 Billion"
   },
   {
@@ -780,12 +873,13 @@ const STATION_DATA = [
     yearLabel: '1991 CE',
     lines: ['Tech'],
     significance: 'major',
+    iconType: ICON_TYPES.CPU,
     narrative: {
-      visual: "The Blue Line begins vertical ascent.",
-      atmosphere: "Hum of modems. Birth of digital space.",
-      insight: "World becomes a network. Distance collapses."
+      visual: "The Blue Line begins its vertical ascent. Information becomes instant and global.",
+      atmosphere: "The hum of modems, the glow of screens, the birth of digital space.",
+      insight: "The world becomes a network. Distance collapses. The map becomes the territory."
     },
-    details: "First stop in Digital Singularity.",
+    details: "The first stop in the Digital Singularity. Information flows at the speed of light.",
     population: "~5.4 Billion"
   },
   {
@@ -795,12 +889,13 @@ const STATION_DATA = [
     yearLabel: '2003 CE',
     lines: ['Tech', 'Philosophy'],
     significance: 'major',
+    iconType: ICON_TYPES.ATOM,
     narrative: {
-      visual: "The Blue Line maps life itself.",
-      atmosphere: "Completion of a map. Understanding of self.",
-      insight: "Human genome sequenced."
+      visual: "The Blue Line maps life itself. The code is read.",
+      atmosphere: "The completion of a map. The understanding of self.",
+      insight: "Human genome sequenced. The map shows our complete code."
     },
-    details: "Genetic medicine advances.",
+    details: "Human Genome Project completed. Genetic medicine advances.",
     population: "~6.4 Billion"
   },
   {
@@ -810,12 +905,13 @@ const STATION_DATA = [
     yearLabel: '2007 CE',
     lines: ['Tech', 'Population'],
     significance: 'major',
+    iconType: ICON_TYPES.SMARTPHONE,
     narrative: {
-      visual: "The Blue Line accelerates further. Network in your pocket.",
-      atmosphere: "Screens everywhere. Constant connection.",
-      insight: "Everyone carries the entire network. Train in every pocket."
+      visual: "The Blue Line accelerates further. The network fits in your pocket.",
+      atmosphere: "The glow of screens everywhere. Constant connection. The world in your hand.",
+      insight: "The map becomes personal. Everyone carries the entire network. The train is in every pocket."
     },
-    details: "Blue reaches into every moment of life.",
+    details: "The network becomes mobile. The Blue Line reaches into every moment of life.",
     population: "~6.7 Billion"
   },
   {
@@ -825,40 +921,52 @@ const STATION_DATA = [
     yearLabel: '2025 CE',
     lines: ['Tech', 'Population', 'Philosophy', 'Empire'],
     significance: 'current',
+    iconType: ICON_TYPES.ALERT,
+    iconSize: 'large',
     narrative: {
-      visual: "Current station. Map is solid light. Blue: vertical. Green: 8.1B peak. Purple: multipolar web.",
-      atmosphere: "Hum of servers. Glow of screens. Vertigo.",
-      insight: "Standing at 'Everywhere/AGI.' Tracks disappear into fog called 'The Future.' Blue illuminates but we cannot see where it leads."
+      visual: "The current station. The map here is so dense it is almost solid light. Blue Line: Vertical ascent. Green Line: Peaking at 8.1 Billion. Purple Line: The 'Unipolar' track is dissolving into a complex web of multipolarity.",
+      atmosphere: "The hum of servers, the glow of screens, and a sense of vertigo.",
+      insight: "We are currently standing on the platform at 'Everywhere / AGI (2025).' Looking down the tunnel, the tracks disappear into a fog called 'The Future.' The Blue Line is so bright it illuminates the tunnel ahead, but we cannot see where the track leads."
     },
-    details: "Compression: stations shrunk from millennia to months. Convergence: Orange frantically catching Blue. Next Stop: No stops listed. Track laid as train moves. WARNING: Mind the gap between biological (Green) and technological (Blue) evolution.",
+    details: "Current Location. Compression: The distance between 'Game Changing' stations has shrunk from millennia to months. Convergence: The Orange Line (Philosophy/Ethics) is frantically trying to catch up to the Blue Line (Tech). The Next Stop: The map lists no stops after 2025. The track is being laid down by the train as it moves. Passenger Warning: Please mind the gap between your biological evolution (Green Line) and your technological reality (Blue Line).",
     population: "8.1 Billion"
   }
 ];
 
 /**
+ * Line color mapping
+ */
+const LINE_COLOR_MAP = {
+  'Tech': '#22d3ee',
+  'War': '#dc2626',
+  'Population': '#22c55e',
+  'Philosophy': '#fbbf24',
+  'Empire': '#a855f7'
+};
+
+/**
  * Process raw station data into fully computed station objects
- * @returns {Array} Processed station array with computed coordinates and colors
+ * Computes coordinates and applies color based on primary line
+ * @returns {Array} Processed station array with computed coordinates, colors, and flattened narrative
  */
 export function processStations() {
-  const LINE_COLOR_MAP = {
-    'Tech': '#22d3ee',
-    'War': '#dc2626',
-    'Population': '#22c55e',
-    'Philosophy': '#fbbf24',
-    'Empire': '#a855f7'
-  };
-
   return STATION_DATA.map(station => {
     const primaryLine = station.lines[0];
     const yPosition = LINE_Y_POSITIONS[primaryLine] || 0.5;
     
     return {
       ...station,
-      color: LINE_COLOR_MAP[primaryLine] || '#ffffff',
+      // Computed color based on primary line
+      color: station.significance === 'current' ? '#fff' : (LINE_COLOR_MAP[primaryLine] || '#ffffff'),
+      // Computed coordinates
       coords: {
         x: yearToX(station.year),
-        y: yPosition * 4000 // VIEWBOX_HEIGHT
-      }
+        y: yPosition * VIEWBOX.HEIGHT
+      },
+      // Flatten narrative properties for backward compatibility with inline rendering
+      visual: station.narrative?.visual,
+      atmosphere: station.narrative?.atmosphere,
+      insight: station.narrative?.insight
     };
   });
 }
@@ -905,5 +1013,6 @@ export function getJourneyStations(stations, journeyIds) {
     .filter(Boolean);
 }
 
+// Export raw data for direct access if needed
+export { STATION_DATA, ICON_TYPES, LINE_COLOR_MAP };
 export default STATION_DATA;
-
