@@ -953,14 +953,24 @@ const LINE_COLOR_MAP = {
  */
 const MIN_STATION_GAP = 300; // Minimum pixels between station centers on same line
 
+// MEDIUM: Memoize processed stations to avoid recalculating collisions on every render
+let memoizedStations = null;
+
 /**
  * Process raw station data into fully computed station objects
  * Computes coordinates, applies color based on primary line,
  * and resolves overlapping station positions using HORIZONTAL offsets
  * to keep stations on their respective metro lines
+ * 
+ * MEDIUM PRIORITY: Memoized to avoid expensive collision detection on every render
  * @returns {Array} Processed station array with computed coordinates, colors, and flattened narrative
  */
 export function processStations() {
+  // Return memoized result if available (stations data is static)
+  if (memoizedStations !== null) {
+    return memoizedStations;
+  }
+  
   // First pass: compute initial coordinates
   const stationsWithCoords = STATION_DATA.map(station => {
     const primaryLine = station.lines[0];
@@ -981,6 +991,9 @@ export function processStations() {
 
   // Second pass: detect and resolve collisions with HORIZONTAL offsets
   const resolvedStations = resolveStationCollisions(stationsWithCoords);
+  
+  // Cache the result
+  memoizedStations = resolvedStations;
   
   return resolvedStations;
 }

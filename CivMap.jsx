@@ -13,6 +13,7 @@ import { yearToX } from './src/utils/coordinates';
 import { LINES, VIEWBOX as VIEWBOX_CONFIG, TIMELINE } from './src/constants/metroConfig';
 import { useMapState } from './src/hooks/useMapState';
 import { processStations, ICON_TYPES } from './src/data/stations';
+import { animateViewBox } from './src/utils/transitions';
 
 /**
  * Icon mapping function - converts icon type strings to JSX elements
@@ -71,6 +72,8 @@ const CivilizationMetroMap = () => {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
   const welcomeRef = useRef(null);
+  const panTransformRef = useRef({ x: 0, y: 0 }); // Current pan transform offset
+  const journeyAnimationRef = useRef(null); // Ref to cancel journey animation
 
   // Debounced search for performance
   const debouncedSearchCallback = useCallback((query) => {
@@ -97,7 +100,7 @@ const CivilizationMetroMap = () => {
 
   // --- Centralized State Management ---
   // Must be called after stations is defined
-  const { state, actions, navigateJourney, filteredStations: mapFilteredStations } = useMapState(stations);
+  const { state, actions, navigateJourney: baseNavigateJourney, filteredStations: mapFilteredStations } = useMapState(stations);
   
   // Extract state for easier access
   const {
@@ -252,7 +255,7 @@ const CivilizationMetroMap = () => {
       setPanStart({ x: e.clientX, y: e.clientY });
       
       // Store initial viewBox position
-      viewBoxStartRef.current = { x: viewBox.x, y: viewBox.y };
+      viewBoxStartRef.current = { x: viewBox.x, y: viewBox.y, width: viewBox.width, height: viewBox.height };
       
       // Convert initial mouse position to SVG coordinates using proper transformation
       const rect = containerRef.current.getBoundingClientRect();
@@ -277,7 +280,8 @@ const CivilizationMetroMap = () => {
         // Store latest mouse event for throttled processing
         latestMouseEventRef.current = e;
         
-        // Throttle using requestAnimationFrame for smooth ~60fps updates
+        // CRITICAL PERFORMANCE FIX: Throttle with requestAnimationFrame for smooth 60fps
+        // Update viewBox directly (not CSS transform) to avoid coordinate system conflicts
         if (!panAnimationFrameRef.current) {
           panAnimationFrameRef.current = requestAnimationFrame(() => {
             panAnimationFrameRef.current = null;
@@ -292,23 +296,24 @@ const CivilizationMetroMap = () => {
             const mouseY = event.clientY - rect.top;
             
             // Convert current mouse position to SVG coordinates using transformation matrix
-            // This ensures accurate panning at all zoom levels
             const svgPoint = svgRef.current.createSVGPoint();
             svgPoint.x = mouseX;
             svgPoint.y = mouseY;
             const currentPointInSvg = svgPoint.matrixTransform(svgRef.current.getScreenCTM().inverse());
             
             // Calculate delta in SVG coordinate space
-            // This works correctly at all zoom levels because we're using the SVG transformation matrix
             const dx = svgPointStartRef.current.x - currentPointInSvg.x;
             const dy = svgPointStartRef.current.y - currentPointInSvg.y;
             
-            // Update viewBox based on the delta in SVG coordinates
-            actions.setViewBox({
-              ...viewBox,
+            // Update viewBox directly with the delta (already in SVG coordinates)
+            const newViewBox = {
+              ...viewBoxStartRef.current,
               x: viewBoxStartRef.current.x + dx,
               y: viewBoxStartRef.current.y + dy
-            });
+            };
+            
+            // Update React state - this will trigger a render but is necessary for correctness
+            actions.setViewBox(newViewBox);
           });
         }
         
@@ -318,7 +323,7 @@ const CivilizationMetroMap = () => {
         actions.endPan();
       }
     }
-  }, [isPanning, viewBox, actions]);
+  }, [isPanning, actions]);
 
   const handleMouseUp = useCallback((e) => {
     if (isPanning) {
@@ -327,6 +332,31 @@ const CivilizationMetroMap = () => {
         cancelAnimationFrame(panAnimationFrameRef.current);
         panAnimationFrameRef.current = null;
       }
+      
+      // Process final mouse position if there's a pending event
+      if (latestMouseEventRef.current && containerRef.current && svgRef.current) {
+        const event = latestMouseEventRef.current;
+        const rect = containerRef.current.getBoundingClientRect();
+        const mouseX = event.clientX - rect.left;
+        const mouseY = event.clientY - rect.top;
+        
+        const svgPoint = svgRef.current.createSVGPoint();
+        svgPoint.x = mouseX;
+        svgPoint.y = mouseY;
+        const currentPointInSvg = svgPoint.matrixTransform(svgRef.current.getScreenCTM().inverse());
+        
+        const dx = svgPointStartRef.current.x - currentPointInSvg.x;
+        const dy = svgPointStartRef.current.y - currentPointInSvg.y;
+        
+        const finalViewBox = {
+          ...viewBoxStartRef.current,
+          x: viewBoxStartRef.current.x + dx,
+          y: viewBoxStartRef.current.y + dy
+        };
+        
+        actions.setViewBox(finalViewBox);
+      }
+      
       latestMouseEventRef.current = null;
       actions.endPan();
       e?.preventDefault();
@@ -458,6 +488,80 @@ const CivilizationMetroMap = () => {
   const journeyStations = useMemo(() => [
     'neolithic', 'uruk', 'classical', 'columbian', 'industrial', 'crisis', 'singularity'
   ], []);
+  
+  // CRITICAL: Override journey navigation with cinematic camera transitions
+  const navigateJourney = useCallback((direction) => {
+    // Cancel any existing journey animation
+    if (journeyAnimationRef.current) {
+      journeyAnimationRef.current();
+      journeyAnimationRef.current = null;
+    }
+    
+    if (!stations.length) return;
+    
+    const journeyStationIds = journeyStations;
+    const currentIndex = journeyIndex;
+    
+    let nextIndex;
+    if (direction === 'next') {
+      nextIndex = (currentIndex + 1) % journeyStationIds.length;
+    } else {
+      nextIndex = (currentIndex - 1 + journeyStationIds.length) % journeyStationIds.length;
+    }
+    
+    const nextStation = stations.find(s => s.id === journeyStationIds[nextIndex]);
+    if (!nextStation) return;
+    
+    // Calculate target viewBox
+    const targetViewBox = {
+      x: nextStation.coords.x - viewBox.width / 2,
+      y: nextStation.coords.y - viewBox.height / 2,
+      width: viewBox.width,
+      height: viewBox.height
+    };
+    
+    // Constrain target viewBox
+    const constrainedTarget = {
+      x: Math.max(0, Math.min(VIEWBOX_WIDTH - targetViewBox.width, targetViewBox.x)),
+      y: Math.max(0, Math.min(VIEWBOX_HEIGHT - targetViewBox.height, targetViewBox.y)),
+      width: targetViewBox.width,
+      height: targetViewBox.height
+    };
+    
+    // Start cinematic transition
+    const startViewBox = { ...viewBox };
+    journeyAnimationRef.current = animateViewBox(
+      startViewBox,
+      constrainedTarget,
+      2000, // 2 second smooth transition
+      (currentViewBox) => {
+        // Update viewBox during animation
+        actions.setViewBox(currentViewBox);
+      },
+      () => {
+        // Animation complete - update journey state
+        baseNavigateJourney(direction);
+        actions.selectStation(nextStation);
+        journeyAnimationRef.current = null;
+      }
+    );
+    
+    // Update journey state immediately (for UI feedback)
+    if (direction === 'next') {
+      actions.journeyNext(nextStation);
+    } else {
+      actions.journeyPrev(nextStation);
+    }
+  }, [stations, journeyIndex, journeyStations, viewBox, actions, baseNavigateJourney]);
+  
+  // Cleanup journey animation on unmount
+  useEffect(() => {
+    return () => {
+      if (journeyAnimationRef.current) {
+        journeyAnimationRef.current();
+      }
+    };
+  }, []);
 
   const activeData = selectedStation || (hoveredStation ? stations.find(s => s.id === hoveredStation) : null);
 
@@ -822,7 +926,58 @@ const CivilizationMetroMap = () => {
           ref={containerRef}
           className="flex-1 relative overflow-hidden bg-neutral-950"
           onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
+          onMouseMove={(e) => {
+            // MEDIUM: Context-aware cursor based on era
+            if (!isPanning && svgRef.current && containerRef.current) {
+              const rect = containerRef.current.getBoundingClientRect();
+              const mouseX = e.clientX - rect.left;
+              const mouseY = e.clientY - rect.top;
+              
+              const svgPoint = svgRef.current.createSVGPoint();
+              svgPoint.x = mouseX;
+              svgPoint.y = mouseY;
+              const pointInSvg = svgPoint.matrixTransform(svgRef.current.getScreenCTM().inverse());
+              
+              // Find closest station to determine era
+              let closestStation = null;
+              let minDistance = Infinity;
+              
+              stations.forEach(s => {
+                const dx = s.coords.x - pointInSvg.x;
+                const dy = s.coords.y - pointInSvg.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance < 100 && distance < minDistance) {
+                  minDistance = distance;
+                  closestStation = s;
+                }
+              });
+              
+              // Determine era-based cursor
+              if (closestStation) {
+                const year = closestStation.year;
+                let cursorStyle = 'pointer';
+                
+                if (year < -1000) {
+                  cursorStyle = 'default'; // Ancient - default cursor
+                } else if (year >= 1914 && year <= 1945) {
+                  cursorStyle = 'crosshair'; // Crosshair for War/Crisis
+                } else if (year >= 1950) {
+                  cursorStyle = 'pointer'; // Digital pointer for Modern
+                }
+                
+                if (containerRef.current) {
+                  containerRef.current.style.cursor = cursorStyle;
+                }
+              } else {
+                if (containerRef.current) {
+                  containerRef.current.style.cursor = isPanning ? 'grabbing' : 'grab';
+                }
+              }
+            }
+            
+            // Call original handleMouseMove for panning
+            handleMouseMove(e);
+          }}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
           onWheel={handleWheel}
@@ -917,6 +1072,109 @@ const CivilizationMetroMap = () => {
                 <feColorMatrix values="1 0 0 0 0  0 0.2 0 0 0  0 0 0.2 0 0  0 0 0 1 0"/>
               </filter>
               
+              {/* HIGH PRIORITY: Dynamic Glitch Filter for Crisis Stations */}
+              <filter id="glitch" x="-50%" y="-50%" width="200%" height="200%">
+                <feTurbulence
+                  type="fractalNoise"
+                  baseFrequency="0.9"
+                  numOctaves="4"
+                  result="turbulence"
+                >
+                  <animate
+                    attributeName="baseFrequency"
+                    values="0.7;1.2;0.8;1.1;0.9"
+                    dur="0.3s"
+                    repeatCount="indefinite"
+                  />
+                </feTurbulence>
+                <feDisplacementMap
+                  in="SourceGraphic"
+                  in2="turbulence"
+                  scale="8"
+                  xChannelSelector="R"
+                  yChannelSelector="G"
+                />
+                <feGaussianBlur stdDeviation="1" result="blur"/>
+                <feMerge>
+                  <feMergeNode in="blur"/>
+                  <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+              </filter>
+              
+              {/* Glitch filter for War line - unstable, vibrating effect */}
+              <filter id="glitch-war" x="-50%" y="-50%" width="200%" height="200%">
+                <feTurbulence
+                  type="turbulence"
+                  baseFrequency="0.5"
+                  numOctaves="3"
+                  result="turbulence"
+                >
+                  <animate
+                    attributeName="baseFrequency"
+                    values="0.3;0.7;0.4;0.6;0.5"
+                    dur="0.5s"
+                    repeatCount="indefinite"
+                  />
+                </feTurbulence>
+                <feDisplacementMap
+                  in="SourceGraphic"
+                  in2="turbulence"
+                  scale="4"
+                  xChannelSelector="R"
+                  yChannelSelector="B"
+                />
+                <feGaussianBlur stdDeviation="2"/>
+              </filter>
+              
+              {/* Singularity Visual Climax - Event Horizon Distortion */}
+              <filter id="singularity-distortion" x="-100%" y="-100%" width="300%" height="300%">
+                <feGaussianBlur stdDeviation="15" result="blur"/>
+                <feColorMatrix
+                  type="matrix"
+                  values="1 0 0 0 0
+                          0 1 0 0 0
+                          0 0 1 0 0
+                          0 0 0 1.5 0"
+                  result="brighten"
+                />
+                <feTurbulence
+                  type="fractalNoise"
+                  baseFrequency="0.3"
+                  numOctaves="5"
+                  result="turbulence"
+                >
+                  <animate
+                    attributeName="baseFrequency"
+                    values="0.2;0.4;0.3;0.35;0.25"
+                    dur="2s"
+                    repeatCount="indefinite"
+                  />
+                </feTurbulence>
+                <feDisplacementMap
+                  in="brighten"
+                  in2="turbulence"
+                  scale="20"
+                  xChannelSelector="R"
+                  yChannelSelector="G"
+                />
+                <feMerge>
+                  <feMergeNode/>
+                  <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+              </filter>
+              
+              {/* Particle effect for Singularity */}
+              <filter id="singularity-particles" x="-200%" y="-200%" width="500%" height="500%">
+                <feGaussianBlur stdDeviation="3" result="blur"/>
+                <feColorMatrix
+                  type="matrix"
+                  values="0 0 0 0 0
+                          0 0 0 0 0
+                          1 1 1 0 0
+                          0 0 0 1 0"
+                />
+              </filter>
+              
               {/* Animated gradient for Blue line */}
               <linearGradient id="blueGradient" x1="0%" y1="0%" x2="0%" y2="100%">
                 <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.3" />
@@ -925,7 +1183,7 @@ const CivilizationMetroMap = () => {
               </linearGradient>
             </defs>
 
-            {/* Time Axis */}
+            {/* Time Axis - Moved to sticky HTML overlay below */}
             <g className="time-axis" opacity="0.4">
               {timeMarkers.map((marker, idx) => (
                 <g key={idx}>
@@ -996,7 +1254,7 @@ const CivilizationMetroMap = () => {
               lineConfig={LINES.War}
               animationProgress={animationProgress}
               isVisible={visibleLines.war}
-              filterId="glow-red"
+              filterId="glitch-war"
             />
 
             <MetroLine
@@ -1057,6 +1315,8 @@ const CivilizationMetroMap = () => {
                     const lineColor = colors[line];
                     const isPrimaryLine = idx === 0;
                     const radius = isActive ? 20 : 15;
+                    const isCrisis = s.significance === 'crisis';
+                    const isSingularity = s.id === 'singularity';
                     
                     return (
                       <g
@@ -1087,7 +1347,29 @@ const CivilizationMetroMap = () => {
                           />
                         )}
                         
-                        {/* Outer ring */}
+                        {/* Singularity: Event Horizon Distortion Effect */}
+                        {isSingularity && isPrimaryLine && (
+                          <circle
+                            cx={s.coords.x}
+                            cy={lineY}
+                            r={radius * 4}
+                            fill="none"
+                            stroke="#22d3ee"
+                            strokeWidth={2}
+                            strokeOpacity={0.3}
+                            filter="url(#singularity-distortion)"
+                            className="pointer-events-none"
+                          >
+                            <animate
+                              attributeName="r"
+                              values={`${radius * 3};${radius * 5};${radius * 3}`}
+                              dur="3s"
+                              repeatCount="indefinite"
+                            />
+                          </circle>
+                        )}
+                        
+                        {/* Outer ring - with glitch filter for crisis stations */}
                         <circle
                           cx={s.coords.x}
                           cy={lineY}
@@ -1095,6 +1377,7 @@ const CivilizationMetroMap = () => {
                           fill="#0a0a0a"
                           stroke={lineColor}
                           strokeWidth={isActive ? 6 : 4}
+                          filter={isCrisis ? "url(#glitch)" : undefined}
                         />
                         
                         {/* Inner dot */}
@@ -1103,7 +1386,40 @@ const CivilizationMetroMap = () => {
                           cy={lineY}
                           r={isActive ? 8 : 6}
                           fill={lineColor}
+                          filter={isCrisis ? "url(#glitch)" : undefined}
                         />
+                        
+                        {/* Singularity: Radiating particles */}
+                        {isSingularity && isPrimaryLine && (
+                          <>
+                            {[...Array(8)].map((_, i) => (
+                              <line
+                                key={`particle-${i}`}
+                                x1={s.coords.x}
+                                y1={lineY}
+                                x2={s.coords.x + Math.cos((i * Math.PI * 2) / 8) * (radius * 3)}
+                                y2={lineY + Math.sin((i * Math.PI * 2) / 8) * (radius * 3)}
+                                stroke="#22d3ee"
+                                strokeWidth={2}
+                                strokeOpacity={0.6}
+                                filter="url(#singularity-particles)"
+                              >
+                                <animate
+                                  attributeName="x2"
+                                  values={`${s.coords.x + Math.cos((i * Math.PI * 2) / 8) * (radius * 2)};${s.coords.x + Math.cos((i * Math.PI * 2) / 8) * (radius * 4)};${s.coords.x + Math.cos((i * Math.PI * 2) / 8) * (radius * 2)}`}
+                                  dur="2s"
+                                  repeatCount="indefinite"
+                                />
+                                <animate
+                                  attributeName="y2"
+                                  values={`${lineY + Math.sin((i * Math.PI * 2) / 8) * (radius * 2)};${lineY + Math.sin((i * Math.PI * 2) / 8) * (radius * 4)};${lineY + Math.sin((i * Math.PI * 2) / 8) * (radius * 2)}`}
+                                  dur="2s"
+                                  repeatCount="indefinite"
+                                />
+                              </line>
+                            ))}
+                          </>
+                        )}
                         
                         {/* Hub indicator */}
                         {s.significance === 'hub' && (
@@ -1321,9 +1637,36 @@ const CivilizationMetroMap = () => {
             </div>
           )}
 
+          {/* HIGH PRIORITY: Sticky Timeline Axis - HTML Overlay */}
+          {showUI && (
+            <div className="absolute bottom-0 left-0 right-0 z-40 bg-neutral-950/95 backdrop-blur-md border-t border-cyan-900/50 px-4 py-3 pointer-events-none">
+              <div className="flex items-center justify-between max-w-full overflow-x-auto">
+                <div className="flex items-center gap-4 min-w-max">
+                  {timeMarkers
+                    .filter(marker => {
+                      // Only show markers visible in current viewport
+                      const markerX = marker.x;
+                      return markerX >= viewBox.x - 200 && markerX <= viewBox.x + viewBox.width + 200;
+                    })
+                    .map((marker, idx) => (
+                      <div key={idx} className="flex flex-col items-center">
+                        <div className="h-2 w-0.5 bg-cyan-400 mb-1"></div>
+                        <span className="text-xs font-mono text-cyan-400/80 whitespace-nowrap">
+                          {marker.label}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+                <div className="text-[10px] font-mono text-cyan-500/60 uppercase tracking-widest whitespace-nowrap ml-4">
+                  {Math.round((viewBox.x / VIEWBOX_WIDTH) * 100)}% • {Math.round(((viewBox.x + viewBox.width) / VIEWBOX_WIDTH) * 100)}%
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Prompt when idle - Human-Centric Guidance */}
           {!activeData && !searchQuery && (
-            <div className="absolute bottom-8 left-8 p-6 bg-gradient-to-br from-neutral-900/95 to-neutral-950/95 backdrop-blur-xl border border-cyan-900/50 rounded-xl text-cyan-400/90 font-mono text-sm max-w-md shadow-2xl z-20">
+            <div className="absolute bottom-20 left-8 p-6 bg-gradient-to-br from-neutral-900/95 to-neutral-950/95 backdrop-blur-xl border border-cyan-900/50 rounded-xl text-cyan-400/90 font-mono text-sm max-w-md shadow-2xl z-20">
               <div className="flex items-start gap-3 mb-4">
                 <Info className="w-5 h-5 text-cyan-500 mt-0.5 flex-shrink-0" />
                 <div>
