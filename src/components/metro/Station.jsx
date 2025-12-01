@@ -97,12 +97,11 @@ const Station = memo(function Station({
         }
       }}
       onMouseDown={(e) => e.stopPropagation()}
+      transform={`translate(${x}, ${y}) scale(${baseScale}) translate(${-x}, ${-y})`}
       style={{
         cursor: 'pointer',
-        transformOrigin: `${x}px ${y}px`,
-        transform: `scale(${baseScale})`,
         opacity: isVisible ? 1 : 0.35,
-        transition: `transform ${EFFECTS.glowOpacity * 500}ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 250ms ease`
+        transition: 'opacity 250ms ease'
       }}
     >
       {/* Journey highlight ring - animated dashed circle */}

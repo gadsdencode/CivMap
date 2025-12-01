@@ -96,14 +96,14 @@ export const CONVERGENCE = {
 };
 
 // Offsets for the final convergence bundle to prevent collision
-// Tighter, organized packing creates a clean "marshalling yard" at the singularity
-// These values create visual separation while maintaining a unified convergence feel
+// Using explicit 30px increments for clean parallel lines at the singularity
+// Creates a visual "cable bundle" effect rather than a tangled knot
 export const CONVERGENCE_OFFSETS = {
-  tech: 0,         // Lead line - Technology drives us forward
-  population: 25,  // Tight follow
-  war: 50,         // Mid-pack
-  empire: 75,      // Lower tier
-  philosophy: 100  // Trailing - Ideas synthesize all others
+  tech: 0,          // Lead line - Technology drives us forward
+  population: 30,   // Tight follow (30px gap)
+  war: 60,          // Mid-pack (60px from top)
+  empire: 90,       // Lower tier (90px from top)
+  philosophy: 120   // Trailing - Ideas synthesize all others (120px from top)
 };
 
 // Journey Mode - Key stations for guided tour

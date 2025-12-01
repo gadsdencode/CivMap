@@ -990,55 +990,26 @@ const CivilizationMetroMap = () => {
               filterId="glow-blue"
             />
 
-            {/* Explicit Path-to-Station Connections - Visual Cohesion */}
-            {/* These ensure stations visually connect to their paths */}
+            {/* Path-to-Station visual connections - shows the line-station intersection points */}
             {filteredStations.map((s) => {
               const isVisible = s.lines.some(line => {
-                const lineMap = {
-                  'Tech': 'tech',
-                  'Population': 'population',
-                  'War': 'war',
-                  'Empire': 'empire',
-                  'Philosophy': 'philosophy'
-                };
+                const lineMap = { 'Tech': 'tech', 'Population': 'population', 'War': 'war', 'Empire': 'empire', 'Philosophy': 'philosophy' };
                 return visibleLines[lineMap[line]] !== false;
               });
-              
               if (!isVisible) return null;
               
-              // For each line this station is on, draw a subtle connection
+              // Draw small circles at exact station coordinates for each line
               return s.lines.map((line) => {
-                const lineMap = {
-                  'Tech': 'tech',
-                  'Population': 'population',
-                  'War': 'war',
-                  'Empire': 'empire',
-                  'Philosophy': 'philosophy'
-                };
-                const lineKey = lineMap[line];
-                if (!visibleLines[lineKey]) return null;
-                
-                const lineColors = {
-                  'Tech': '#22d3ee',
-                  'Population': '#22c55e',
-                  'War': '#ef4444',
-                  'Empire': '#9333ea',
-                  'Philosophy': '#fbbf24'
-                };
-                const lineColor = lineColors[line] || s.color;
-                
-                // Subtle connection glow at path-station intersection
-                // This creates visual cohesion showing the station is ON the path
+                const lineMap = { 'Tech': 'tech', 'Population': 'population', 'War': 'war', 'Empire': 'empire', 'Philosophy': 'philosophy' };
+                if (!visibleLines[lineMap[line]]) return null;
+                const colors = { 'Tech': '#22d3ee', 'Population': '#22c55e', 'War': '#ef4444', 'Empire': '#9333ea', 'Philosophy': '#fbbf24' };
                 return (
                   <circle
-                    key={`${s.id}-${line}-path-connection`}
+                    key={`${s.id}-${line}-anchor`}
                     cx={s.coords.x}
                     cy={s.coords.y}
-                    r="50"
-                    fill="none"
-                    stroke={lineColor}
-                    strokeWidth="10"
-                    strokeOpacity="0.15"
+                    r="8"
+                    fill={colors[line]}
                     className="pointer-events-none"
                   />
                 );
