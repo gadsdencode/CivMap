@@ -7,13 +7,14 @@ import { useAccessibility, useFocusManagement } from './hooks/useAccessibility';
 import { usePerformance, useDebounce, useThrottle } from './hooks/usePerformance';
 import { LoadingOverlay, LoadingSpinner } from './components/Loading';
 import AccessibleButton from './components/AccessibleButton';
-import { MetroLine, Station } from './src/components/metro';
 import { generateSmoothPath, generateMetroPaths } from './src/utils/pathGenerator';
 import { yearToX } from './src/utils/coordinates';
 import { LINES, VIEWBOX as VIEWBOX_CONFIG, TIMELINE } from './src/constants/metroConfig';
 import { useMapState } from './src/hooks/useMapState';
+import { useMapController } from './src/hooks/useMapController';
 import { processStations, ICON_TYPES } from './src/data/stations';
 import { animateViewBox } from './src/utils/transitions';
+import MapRenderer from './src/components/MapRenderer';
 
 /**
  * Icon mapping function - converts icon type strings to JSX elements
@@ -66,13 +67,9 @@ const CivilizationMetroMap = () => {
   const VIEWBOX_HEIGHT = 4000;
   
   // Local refs and state not managed by useMapState
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
-  const viewBoxStartRef = useRef({ x: 0, y: 0 });
-  const svgPointStartRef = useRef({ x: 0, y: 0 }); // SVG coordinate where pan started
   const svgRef = useRef(null);
   const containerRef = useRef(null);
   const welcomeRef = useRef(null);
-  const panTransformRef = useRef({ x: 0, y: 0 }); // Current pan transform offset
   const journeyAnimationRef = useRef(null); // Ref to cancel journey animation
 
   // Debounced search for performance
@@ -126,6 +123,15 @@ const CivilizationMetroMap = () => {
   // Alias state for backward compatibility
   const hoveredStation = hoveredStationId;
   
+  // Filtered and searchable stations
+  // Use filtered stations from useMapState (already handles search and era filtering)
+  const filteredStations = mapFilteredStations;
+  
+  // Journey stations - key milestones for guided tour
+  const journeyStations = useMemo(() => [
+    'neolithic', 'uruk', 'classical', 'columbian', 'industrial', 'crisis', 'singularity'
+  ], []);
+  
   // Focus trap for welcome modal
   useFocusTrap(showWelcome, welcomeRef);
 
@@ -141,6 +147,66 @@ const CivilizationMetroMap = () => {
   const currentZoom = useMemo(() => {
     return VIEWBOX_WIDTH / viewBox.width;
   }, [viewBox.width]);
+
+  // MEDIUM PRIORITY: Label collision detection - prevent overlap in dense areas
+  // Calculate label offsets for visible stations to avoid overlap
+  const labelOffsets = useMemo(() => {
+    if (currentZoom <= 0.6) return {}; // Only apply at detail zoom levels
+    
+    const offsets = {};
+    const labelHeight = 30; // Approximate label height
+    const minLabelGap = 40; // Minimum vertical gap between labels
+    const visibleLabels = filteredStations
+      .filter(s => {
+        const isHovered = hoveredStation === s.id;
+        const isSelected = selectedStation?.id === s.id;
+        const isInJourney = journeyMode && journeyStations[journeyIndex] === s.id;
+        const isSearchMatch = searchQuery && (s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.yearLabel.toLowerCase().includes(searchQuery.toLowerCase()));
+        return showAllLabels || isHovered || isSelected || isInJourney || isSearchMatch;
+      })
+      .map(s => ({
+        id: s.id,
+        x: s.coords.x,
+        y: Math.min(...s.lines.map(l => {
+          const lineYPositions = {
+            'Tech': 0.18 * VIEWBOX_CONFIG.HEIGHT,
+            'War': 0.36 * VIEWBOX_CONFIG.HEIGHT,
+            'Population': 0.50 * VIEWBOX_CONFIG.HEIGHT,
+            'Philosophy': 0.64 * VIEWBOX_CONFIG.HEIGHT,
+            'Empire': 0.82 * VIEWBOX_CONFIG.HEIGHT
+          };
+          return lineYPositions[l] || 0;
+        })) - 30, // Label Y position
+        priority: (selectedStation?.id === s.id ? 3 : hoveredStation === s.id ? 2 : 1) // Higher priority = less offset
+      }))
+      .sort((a, b) => a.x - b.x); // Sort by X position
+    
+    // Simple collision detection: check nearby labels and apply vertical offsets
+    for (let i = 0; i < visibleLabels.length; i++) {
+      const current = visibleLabels[i];
+      let offsetY = 0;
+      let maxOffset = 0;
+      
+      // Check for collisions with previous labels
+      for (let j = 0; j < i; j++) {
+        const other = visibleLabels[j];
+        const distanceX = Math.abs(current.x - other.x);
+        const distanceY = Math.abs(current.y - (other.y + offsets[other.id] || 0));
+        
+        // If labels are close horizontally and would overlap vertically
+        if (distanceX < 200 && distanceY < minLabelGap) {
+          const requiredOffset = minLabelGap - distanceY + (offsets[other.id] || 0);
+          maxOffset = Math.max(maxOffset, requiredOffset);
+        }
+      }
+      
+      // Apply offset (higher priority labels get less offset)
+      offsetY = maxOffset / current.priority;
+      offsets[current.id] = offsetY;
+    }
+    
+    return offsets;
+  }, [filteredStations, currentZoom, showAllLabels, hoveredStation, selectedStation, journeyMode, journeyIndex, journeyStations, searchQuery]);
 
   // Determine narrative focus: Which line should be highlighted based on selected station?
   const narrativeFocusLine = useMemo(() => {
@@ -209,240 +275,19 @@ const CivilizationMetroMap = () => {
     }
   }, [isLoading, announce, actions]);
 
-  // Throttled pan update using requestAnimationFrame for smooth performance
-  const panAnimationFrameRef = useRef(null);
-  const latestMouseEventRef = useRef(null);
+  // LOW PRIORITY: Extract map controller logic into custom hook for maintainability
+  const { handleMouseDown, handleMouseMove, handleMouseUp, handleWheel: handleWheelFromController } = useMapController({
+    viewBox,
+    setViewBox: actions.setViewBox,
+    isPanning,
+    startPan: actions.startPan,
+    endPan: actions.endPan,
+    containerRef,
+    svgRef
+  });
 
-  // Check if the click target is an interactive element (station, button, etc.)
-  const isInteractiveElement = useCallback((target) => {
-    if (!target) return false;
-    
-    // Check if target or any parent has a class indicating it's interactive
-    let element = target;
-    while (element && element !== containerRef.current && element !== document.body) {
-      // Check for station elements (g elements with station class)
-      if (element.classList && element.classList.contains('station')) {
-        return true;
-      }
-      // Check for buttons and other interactive elements
-      if (element.tagName === 'BUTTON' || element.tagName === 'A' || 
-          element.closest && (element.closest('button') || element.closest('a'))) {
-        return true;
-      }
-      // Check if it's a text element that's part of a station label
-      if (element.tagName === 'text' && element.closest && element.closest('.station')) {
-        return true;
-      }
-      // Check for input elements
-      if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.tagName === 'SELECT') {
-        return true;
-      }
-      element = element.parentElement;
-    }
-    return false;
-  }, []);
-
-  const handleMouseDown = useCallback((e) => {
-    // Only pan if clicking on background (not on stations or interactive elements)
-    const target = e.target;
-    
-    // Check if clicking on an interactive element (stations call stopPropagation, so this is a safety check)
-    const isInteractive = isInteractiveElement(target);
-    
-    // Only start panning on left mouse button
-    if (e.button !== 0) return;
-    
-    // Don't pan if clicking on interactive elements
-    if (isInteractive) return;
-    
-    // Allow panning on container div or SVG background elements
-    // Stations already call stopPropagation, so their clicks won't reach here
-    const isContainer = target === containerRef.current;
-    const isSvgBackground = target.tagName === 'svg' || 
-                            target.tagName === 'path' || 
-                            target.tagName === 'line' ||
-                            target.tagName === 'defs' ||
-                            (target.tagName === 'text' && !target.closest?.('.station')) ||
-                            (target.tagName === 'g' && !target.classList?.contains('station'));
-    
-    if ((isContainer || isSvgBackground) && svgRef.current && containerRef.current) {
-      // Store screen coordinates for mouse tracking
-      setPanStart({ x: e.clientX, y: e.clientY });
-      
-      // Store initial viewBox position
-      viewBoxStartRef.current = { x: viewBox.x, y: viewBox.y, width: viewBox.width, height: viewBox.height };
-      
-      // Convert initial mouse position to SVG coordinates using proper transformation
-      const rect = containerRef.current.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-      
-      const svgPoint = svgRef.current.createSVGPoint();
-      svgPoint.x = mouseX;
-      svgPoint.y = mouseY;
-      const pointInSvg = svgPoint.matrixTransform(svgRef.current.getScreenCTM().inverse());
-      svgPointStartRef.current = { x: pointInSvg.x, y: pointInSvg.y };
-      
-      actions.startPan();
-      e.preventDefault();
-      e.stopPropagation();
-    }
-  }, [isInteractiveElement, viewBox, actions]);
-
-  const handleMouseMove = useCallback((e) => {
-    if (isPanning && containerRef.current && svgRef.current) {
-      try {
-        // Store latest mouse event for throttled processing
-        latestMouseEventRef.current = e;
-        
-        // CRITICAL PERFORMANCE FIX: Throttle with requestAnimationFrame for smooth 60fps
-        // Update viewBox directly (not CSS transform) to avoid coordinate system conflicts
-        if (!panAnimationFrameRef.current) {
-          panAnimationFrameRef.current = requestAnimationFrame(() => {
-            panAnimationFrameRef.current = null;
-            
-            if (!isPanning || !containerRef.current || !svgRef.current || !latestMouseEventRef.current) {
-              return;
-            }
-            
-            const event = latestMouseEventRef.current;
-            const rect = containerRef.current.getBoundingClientRect();
-            const mouseX = event.clientX - rect.left;
-            const mouseY = event.clientY - rect.top;
-            
-            // Convert current mouse position to SVG coordinates using transformation matrix
-            const svgPoint = svgRef.current.createSVGPoint();
-            svgPoint.x = mouseX;
-            svgPoint.y = mouseY;
-            const currentPointInSvg = svgPoint.matrixTransform(svgRef.current.getScreenCTM().inverse());
-            
-            // Calculate delta in SVG coordinate space
-            const dx = svgPointStartRef.current.x - currentPointInSvg.x;
-            const dy = svgPointStartRef.current.y - currentPointInSvg.y;
-            
-            // Update viewBox directly with the delta (already in SVG coordinates)
-            const newViewBox = {
-              ...viewBoxStartRef.current,
-              x: viewBoxStartRef.current.x + dx,
-              y: viewBoxStartRef.current.y + dy
-            };
-            
-            // Update React state - this will trigger a render but is necessary for correctness
-            actions.setViewBox(newViewBox);
-          });
-        }
-        
-        e.preventDefault();
-      } catch (err) {
-        console.error('Pan error:', err);
-        actions.endPan();
-      }
-    }
-  }, [isPanning, actions]);
-
-  const handleMouseUp = useCallback((e) => {
-    if (isPanning) {
-      // Cancel any pending pan animation frame
-      if (panAnimationFrameRef.current) {
-        cancelAnimationFrame(panAnimationFrameRef.current);
-        panAnimationFrameRef.current = null;
-      }
-      
-      // Process final mouse position if there's a pending event
-      if (latestMouseEventRef.current && containerRef.current && svgRef.current) {
-        const event = latestMouseEventRef.current;
-        const rect = containerRef.current.getBoundingClientRect();
-        const mouseX = event.clientX - rect.left;
-        const mouseY = event.clientY - rect.top;
-        
-        const svgPoint = svgRef.current.createSVGPoint();
-        svgPoint.x = mouseX;
-        svgPoint.y = mouseY;
-        const currentPointInSvg = svgPoint.matrixTransform(svgRef.current.getScreenCTM().inverse());
-        
-        const dx = svgPointStartRef.current.x - currentPointInSvg.x;
-        const dy = svgPointStartRef.current.y - currentPointInSvg.y;
-        
-        const finalViewBox = {
-          ...viewBoxStartRef.current,
-          x: viewBoxStartRef.current.x + dx,
-          y: viewBoxStartRef.current.y + dy
-        };
-        
-        actions.setViewBox(finalViewBox);
-      }
-      
-      latestMouseEventRef.current = null;
-      actions.endPan();
-      e?.preventDefault();
-    }
-  }, [isPanning, actions]);
-
-  // Attach mouse move and up listeners to window for better drag experience
-  useEffect(() => {
-    if (isPanning) {
-      const handleWindowMouseMove = (e) => {
-        handleMouseMove(e);
-      };
-      const handleWindowMouseUp = (e) => {
-        handleMouseUp(e);
-      };
-
-      window.addEventListener('mousemove', handleWindowMouseMove);
-      window.addEventListener('mouseup', handleWindowMouseUp);
-      // Prevent text selection while dragging
-      document.body.style.userSelect = 'none';
-      document.body.style.cursor = 'grabbing';
-
-      return () => {
-        window.removeEventListener('mousemove', handleWindowMouseMove);
-        window.removeEventListener('mouseup', handleWindowMouseUp);
-        document.body.style.userSelect = '';
-        document.body.style.cursor = '';
-      };
-    }
-  }, [isPanning, handleMouseMove, handleMouseUp]);
-
-  const handleWheel = (e) => {
-    e.preventDefault();
-    const zoomFactor = e.deltaY > 0 ? 1.15 : 0.85; // Zoom factor (smoother)
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect || !svgRef.current) return;
-
-    // Get mouse position relative to container
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    // Get current SVG point under cursor
-    const svgPoint = svgRef.current.createSVGPoint();
-    svgPoint.x = mouseX;
-    svgPoint.y = mouseY;
-    const pointInSvg = svgPoint.matrixTransform(svgRef.current.getScreenCTM().inverse());
-
-    // Calculate new viewBox dimensions
-    const newWidth = viewBox.width * zoomFactor;
-    const newHeight = viewBox.height * zoomFactor;
-
-    // Constrain zoom levels
-    const minZoom = 0.05; // Can zoom out to see 20x the full map
-    const maxZoom = 20; // Can zoom in 20x
-    const constrainedWidth = Math.max(VIEWBOX_WIDTH * minZoom, Math.min(VIEWBOX_WIDTH * maxZoom, newWidth));
-    const constrainedHeight = Math.max(VIEWBOX_HEIGHT * minZoom, Math.min(VIEWBOX_HEIGHT * maxZoom, newHeight));
-
-    // Calculate zoom ratio (actual zoom applied)
-    const actualZoom = constrainedWidth / viewBox.width;
-
-    // Zoom to cursor point: keep the point under cursor in the same screen position
-    const newX = pointInSvg.x - (mouseX / rect.width) * constrainedWidth;
-    const newY = pointInSvg.y - (mouseY / rect.height) * constrainedHeight;
-
-    actions.setViewBox({
-      x: Math.max(0, Math.min(VIEWBOX_WIDTH - constrainedWidth, newX)),
-      y: Math.max(0, Math.min(VIEWBOX_HEIGHT - constrainedHeight, newY)),
-      width: constrainedWidth,
-      height: constrainedHeight
-    });
-  };
+  // Use wheel handler from map controller (includes smooth transitions)
+  const handleWheel = handleWheelFromController;
 
   // Zoom control functions - use actions from useMapState
   const zoomIn = () => actions.zoomIn();
@@ -494,15 +339,6 @@ const CivilizationMetroMap = () => {
     });
     return markers;
   }, []);
-
-  // Filtered and searchable stations
-  // Use filtered stations from useMapState (already handles search and era filtering)
-  const filteredStations = mapFilteredStations;
-
-  // Journey stations - key milestones for guided tour
-  const journeyStations = useMemo(() => [
-    'neolithic', 'uruk', 'classical', 'columbian', 'industrial', 'crisis', 'singularity'
-  ], []);
   
   // CRITICAL: Override journey navigation with cinematic camera transitions
   const navigateJourney = useCallback((direction) => {
@@ -759,25 +595,92 @@ const CivilizationMetroMap = () => {
       {/* Human-Centric Control Panel */}
       {showUI && (
       <div className="absolute top-20 left-4 z-30 flex flex-col gap-3">
-        {/* Search */}
+        {/* HIGH PRIORITY: Station Finder - Combobox for keyboard navigation (WCAG Compliance) */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-cyan-400/60" />
           <input
             type="text"
+            id="station-finder"
+            role="combobox"
+            aria-expanded={searchQuery && filteredStations.length > 0}
+            aria-autocomplete="list"
+            aria-controls="station-finder-results"
+            aria-label="Station Finder: Type to search and jump to stations"
             value={searchQuery}
             onChange={(e) => actions.setSearchQuery(e.target.value)}
-            placeholder="Search stations..."
+            onKeyDown={(e) => {
+              // Allow jumping to first result on Enter
+              if (e.key === 'Enter' && filteredStations.length > 0) {
+                e.preventDefault();
+                actions.centerOnStation(filteredStations[0]);
+                actions.selectStation(filteredStations[0]);
+                announce(`Navigated to ${filteredStations[0].name}`);
+              }
+              // Arrow key navigation through results
+              if (e.key === 'ArrowDown' && filteredStations.length > 0) {
+                e.preventDefault();
+                const firstResult = filteredStations[0];
+                actions.centerOnStation(firstResult);
+                announce(`Found ${filteredStations.length} stations. Press Enter to select ${firstResult.name}`);
+              }
+            }}
+            placeholder="Station Finder: Type to search..."
             className="pl-10 pr-4 py-2 bg-neutral-900/90 backdrop-blur-md border border-cyan-900/50 rounded-lg text-white text-sm placeholder-cyan-400/40 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 w-64"
+            autoComplete="off"
           />
           {searchQuery && (
             <button
-              onClick={() => actions.setSearchQuery('')}
+              onClick={() => {
+                actions.setSearchQuery('');
+                announce('Search cleared');
+              }}
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-cyan-400/60 hover:text-white"
+              aria-label="Clear search"
             >
               <X size={16} />
             </button>
           )}
         </div>
+        
+        {/* Station Finder Results Dropdown - Accessible */}
+        {searchQuery && filteredStations.length > 0 && (
+          <div
+            id="station-finder-results"
+            role="listbox"
+            aria-label={`${filteredStations.length} stations found`}
+            className="absolute top-full left-0 mt-2 w-64 max-h-96 overflow-y-auto bg-neutral-900/95 backdrop-blur-md border border-cyan-900/50 rounded-lg shadow-2xl z-50"
+          >
+            {filteredStations.slice(0, 10).map((station, idx) => (
+              <button
+                key={station.id}
+                role="option"
+                aria-selected={idx === 0}
+                onClick={() => {
+                  actions.centerOnStation(station);
+                  actions.selectStation(station);
+                  announce(`Navigated to ${station.name}`);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    actions.centerOnStation(station);
+                    actions.selectStation(station);
+                    announce(`Navigated to ${station.name}`);
+                  }
+                }}
+                className="w-full text-left p-3 bg-neutral-800/50 hover:bg-neutral-800 border-b border-neutral-700/50 hover:border-cyan-500/50 transition-colors focus:outline-none focus:bg-cyan-900/30 focus:border-cyan-500"
+              >
+                <div className="font-semibold text-white text-sm mb-1">{station.name}</div>
+                <div className="text-xs text-cyan-400">{station.yearLabel}</div>
+              </button>
+            ))}
+            {filteredStations.length > 10 && (
+              <div className="p-2 text-xs text-neutral-500 text-center border-t border-neutral-700/50">
+                +{filteredStations.length - 10} more results
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Filter Toggle */}
         <button
@@ -1050,485 +953,30 @@ const CivilizationMetroMap = () => {
           </div>
           )}
           
-          <svg 
-            ref={svgRef}
-            className="w-full h-full relative z-10"
-            viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
-            preserveAspectRatio="xMidYMid meet"
-          >
-            <defs>
-              {/* Enhanced Glow Filters */}
-              <filter id="glow-blue" x="-100%" y="-100%" width="300%" height="300%">
-                <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
-                <feMerge>
-                  <feMergeNode in="coloredBlur"/>
-                  <feMergeNode in="SourceGraphic"/>
-                </feMerge>
-              </filter>
-              <filter id="glow-red" x="-100%" y="-100%" width="300%" height="300%">
-                <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
-                <feMerge>
-                  <feMergeNode in="coloredBlur"/>
-                  <feMergeNode in="SourceGraphic"/>
-                </feMerge>
-              </filter>
-              <filter id="glow-green" x="-100%" y="-100%" width="300%" height="300%">
-                <feGaussianBlur stdDeviation="5" result="coloredBlur"/>
-                <feMerge>
-                  <feMergeNode in="coloredBlur"/>
-                  <feMergeNode in="SourceGraphic"/>
-                </feMerge>
-              </filter>
-              <filter id="mist" x="-100%" y="-100%" width="300%" height="300%">
-                <feGaussianBlur stdDeviation="20"/>
-              </filter>
-              <filter id="spark" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="2"/>
-                <feColorMatrix values="1 0 0 0 0  0 0.2 0 0 0  0 0 0.2 0 0  0 0 0 1 0"/>
-              </filter>
-              
-              {/* HIGH PRIORITY: Dynamic Glitch Filter for Crisis Stations */}
-              <filter id="glitch" x="-50%" y="-50%" width="200%" height="200%">
-                <feTurbulence
-                  type="fractalNoise"
-                  baseFrequency="0.9"
-                  numOctaves="4"
-                  result="turbulence"
-                >
-                  <animate
-                    attributeName="baseFrequency"
-                    values="0.7;1.2;0.8;1.1;0.9"
-                    dur="0.3s"
-                    repeatCount="indefinite"
-                  />
-                </feTurbulence>
-                <feDisplacementMap
-                  in="SourceGraphic"
-                  in2="turbulence"
-                  scale="8"
-                  xChannelSelector="R"
-                  yChannelSelector="G"
-                />
-                <feGaussianBlur stdDeviation="1" result="blur"/>
-                <feMerge>
-                  <feMergeNode in="blur"/>
-                  <feMergeNode in="SourceGraphic"/>
-                </feMerge>
-              </filter>
-              
-              {/* Glitch filter for War line - unstable, vibrating effect */}
-              <filter id="glitch-war" x="-50%" y="-50%" width="200%" height="200%">
-                <feTurbulence
-                  type="turbulence"
-                  baseFrequency="0.5"
-                  numOctaves="3"
-                  result="turbulence"
-                >
-                  <animate
-                    attributeName="baseFrequency"
-                    values="0.3;0.7;0.4;0.6;0.5"
-                    dur="0.5s"
-                    repeatCount="indefinite"
-                  />
-                </feTurbulence>
-                <feDisplacementMap
-                  in="SourceGraphic"
-                  in2="turbulence"
-                  scale="4"
-                  xChannelSelector="R"
-                  yChannelSelector="B"
-                />
-                <feGaussianBlur stdDeviation="2"/>
-              </filter>
-              
-              {/* Singularity Visual Climax - Event Horizon Distortion */}
-              <filter id="singularity-distortion" x="-100%" y="-100%" width="300%" height="300%">
-                <feGaussianBlur stdDeviation="15" result="blur"/>
-                <feColorMatrix
-                  type="matrix"
-                  values="1 0 0 0 0
-                          0 1 0 0 0
-                          0 0 1 0 0
-                          0 0 0 1.5 0"
-                  result="brighten"
-                />
-                <feTurbulence
-                  type="fractalNoise"
-                  baseFrequency="0.3"
-                  numOctaves="5"
-                  result="turbulence"
-                >
-                  <animate
-                    attributeName="baseFrequency"
-                    values="0.2;0.4;0.3;0.35;0.25"
-                    dur="2s"
-                    repeatCount="indefinite"
-                  />
-                </feTurbulence>
-                <feDisplacementMap
-                  in="brighten"
-                  in2="turbulence"
-                  scale="20"
-                  xChannelSelector="R"
-                  yChannelSelector="G"
-                />
-                <feMerge>
-                  <feMergeNode/>
-                  <feMergeNode in="SourceGraphic"/>
-                </feMerge>
-              </filter>
-              
-              {/* Particle effect for Singularity */}
-              <filter id="singularity-particles" x="-200%" y="-200%" width="500%" height="500%">
-                <feGaussianBlur stdDeviation="3" result="blur"/>
-                <feColorMatrix
-                  type="matrix"
-                  values="0 0 0 0 0
-                          0 0 0 0 0
-                          1 1 1 0 0
-                          0 0 0 1 0"
-                />
-              </filter>
-              
-              {/* Animated gradient for Blue line */}
-              <linearGradient id="blueGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.3" />
-                <stop offset="100%" stopColor="#22d3ee" stopOpacity="1" />
-                <animate attributeName="y2" values="0%;100%;0%" dur="3s" repeatCount="indefinite" />
-              </linearGradient>
-            </defs>
-
-            {/* Time Axis - Moved to sticky HTML overlay below */}
-            <g className="time-axis" opacity="0.4">
-              {timeMarkers.map((marker, idx) => (
-                <g key={idx}>
-                  <line
-                    x1={marker.x}
-                    y1={VIEWBOX_HEIGHT - 80}
-                    x2={marker.x}
-                    y2={VIEWBOX_HEIGHT}
-                    stroke="#22d3ee"
-                    strokeWidth="3"
-                    strokeDasharray="5,5"
-                  />
-                  <text
-                    x={marker.x}
-                    y={VIEWBOX_HEIGHT - 20}
-                    textAnchor="middle"
-                    fill="#22d3ee"
-                    fontSize="24"
-                    fontFamily="monospace"
-                    opacity="0.7"
-                    fontWeight="bold"
-                  >
-                    {marker.label}
-                  </text>
-                </g>
-              ))}
-              <text
-                x={VIEWBOX_WIDTH / 2}
-                y={VIEWBOX_HEIGHT - 5}
-                textAnchor="middle"
-                fill="#22d3ee"
-                fontSize="20"
-                fontFamily="monospace"
-                opacity="0.5"
-                className="uppercase tracking-widest"
-                fontWeight="bold"
-              >
-                Time (Piecewise Scale) • 12,025 Years of Human Civilization
-              </text>
-            </g>
-
-            {/* Metro Lines - Performance-First with Narrative Focus */}
-            <MetroLine
-              pathData={paths.orange}
-              lineConfig={LINES.Philosophy}
-              animationProgress={animationProgress}
-              isVisible={visibleLines.philosophy}
-              isNarrativeFocus={narrativeFocusLine === 'philosophy'}
-              isCrisisMode={false}
-            />
-            
-            <MetroLine
-              pathData={paths.purple}
-              lineConfig={LINES.Empire}
-              animationProgress={animationProgress}
-              isVisible={visibleLines.empire}
-              isNarrativeFocus={narrativeFocusLine === 'empire'}
-              isCrisisMode={false}
-            />
-
-            <MetroLine
-              // Handle object structure for braided lines or string for simple lines
-              pathData={typeof paths.green === 'string' ? paths.green : paths.green.main}
-              lineConfig={LINES.Population}
-              animationProgress={animationProgress}
-              isVisible={visibleLines.population}
-              isNarrativeFocus={narrativeFocusLine === 'population'}
-              isCrisisMode={false}
-            />
-
-            <MetroLine
-              pathData={paths.red}
-              lineConfig={LINES.War}
-              animationProgress={animationProgress}
-              isVisible={visibleLines.war}
-              isNarrativeFocus={narrativeFocusLine === 'war'}
-              isCrisisMode={true} // War line always has crisis mode for visual impact
-            />
-
-            <MetroLine
-              pathData={paths.blue}
-              lineConfig={LINES.Tech}
-              animationProgress={animationProgress}
-              isVisible={visibleLines.tech}
-              isNarrativeFocus={narrativeFocusLine === 'tech'}
-              isCrisisMode={false}
-            />
-
-            {/* PROPER METRO MAP: Render each station ON ITS LINE(S) at the line's Y position */}
-            {/* For multi-line stations, render a marker on EACH line */}
-            {filteredStations.map((s) => {
-              const isHovered = hoveredStation === s.id;
-              const isSelected = selectedStation?.id === s.id;
-              const isInJourney = journeyMode && journeyStations[journeyIndex] === s.id;
-              const isSearchMatch = searchQuery && (s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.yearLabel.toLowerCase().includes(searchQuery.toLowerCase()));
-              const shouldShowLabel = showAllLabels || isHovered || isSelected || isInJourney || isSearchMatch;
-              const isActive = isHovered || isSelected || isInJourney;
-              
-              // Line Y positions (must match pathGenerator.js)
-              const lineYPositions = {
-                'Tech': 0.18 * VIEWBOX_CONFIG.HEIGHT,
-                'War': 0.36 * VIEWBOX_CONFIG.HEIGHT,
-                'Population': 0.50 * VIEWBOX_CONFIG.HEIGHT,
-                'Philosophy': 0.64 * VIEWBOX_CONFIG.HEIGHT,
-                'Empire': 0.82 * VIEWBOX_CONFIG.HEIGHT
-              };
-              
-              const lineMap = { 'Tech': 'tech', 'Population': 'population', 'War': 'war', 'Empire': 'empire', 'Philosophy': 'philosophy' };
-              const colors = { 'Tech': '#22d3ee', 'Population': '#22c55e', 'War': '#ef4444', 'Empire': '#9333ea', 'Philosophy': '#fbbf24' };
-              
-              // Get visible lines for this station
-              const visibleStationLines = s.lines.filter(line => visibleLines[lineMap[line]] !== false);
-              if (visibleStationLines.length === 0 && !isSearchMatch) return null;
-              
-              // LOD: At very low zoom, only show major stations (hubs, crisis, or in journey)
-              const isTooSmall = currentZoom < 0.2;
-              const shouldRenderStation = !isTooSmall || s.significance === 'hub' || s.significance === 'crisis' || isInJourney || isSearchMatch;
-              if (!shouldRenderStation) return null;
-              
-              // Render a marker on EACH line this station belongs to
-              return (
-                <g key={s.id}>
-                  {/* Vertical connector for multi-line stations */}
-                  {visibleStationLines.length > 1 && (
-                    <line
-                      x1={s.coords.x}
-                      y1={Math.min(...visibleStationLines.map(l => lineYPositions[l]))}
-                      x2={s.coords.x}
-                      y2={Math.max(...visibleStationLines.map(l => lineYPositions[l]))}
-                      stroke="#ffffff"
-                      strokeWidth={4}
-                      strokeOpacity={0.3}
-                      strokeDasharray="8,8"
-                      className="pointer-events-none"
-                    />
-                  )}
-                  
-                  {/* Station marker on each line - LOD aware */}
-                  {visibleStationLines.map((line, idx) => {
-                    const lineY = lineYPositions[line];
-                    const lineColor = colors[line];
-                    const isPrimaryLine = idx === 0;
-                    
-                    // LOD: Adjust radius based on zoom level
-                    const baseRadius = isActive ? 20 : 15;
-                    const radius = currentZoom < 0.2 ? baseRadius * 0.5 : baseRadius;
-                    
-                    const isCrisis = s.significance === 'crisis';
-                    const isSingularity = s.id === 'singularity';
-                    const isDetailView = currentZoom > 0.6; // Define here for use in this scope
-                    
-                    return (
-                      <g
-                        key={`${s.id}-${line}`}
-                        className="station-marker"
-                        style={{ cursor: 'pointer' }}
-                        onMouseEnter={() => actions.hoverStation(s.id)}
-                        onMouseLeave={() => actions.hoverStation(null)}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          actions.selectStation(s);
-                          if (journeyMode) {
-                            const jdx = journeyStations.indexOf(s.id);
-                            if (jdx !== -1) actions.journeyGoTo(jdx, s);
-                          }
-                        }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                      >
-                        {/* Glow effect on active */}
-                        {isActive && (
-                          <circle
-                            cx={s.coords.x}
-                            cy={lineY}
-                            r={radius * 2.5}
-                            fill={lineColor}
-                            fillOpacity={0.15}
-                            className="pointer-events-none"
-                          />
-                        )}
-                        
-                        {/* Singularity: Event Horizon Distortion Effect */}
-                        {isSingularity && isPrimaryLine && (
-                          <circle
-                            cx={s.coords.x}
-                            cy={lineY}
-                            r={radius * 4}
-                            fill="none"
-                            stroke="#22d3ee"
-                            strokeWidth={2}
-                            strokeOpacity={0.3}
-                            filter="url(#singularity-distortion)"
-                            className="pointer-events-none"
-                          >
-                            <animate
-                              attributeName="r"
-                              values={`${radius * 3};${radius * 5};${radius * 3}`}
-                              dur="3s"
-                              repeatCount="indefinite"
-                            />
-                          </circle>
-                        )}
-                        
-                        {/* Outer ring - with CSS glitch class for crisis stations (replaces SVG filter) */}
-                        <circle
-                          cx={s.coords.x}
-                          cy={lineY}
-                          r={radius}
-                          fill="#0a0a0a"
-                          stroke={lineColor}
-                          strokeWidth={isActive ? 6 : 4}
-                          className={isCrisis ? "crisis-active" : ""}
-                        />
-                        
-                        {/* Inner dot - only render if zoomed in or active (LOD) */}
-                        {(isDetailView || isActive) && (
-                          <circle
-                            cx={s.coords.x}
-                            cy={lineY}
-                            r={isActive ? 8 : 6}
-                            fill={lineColor}
-                            className={isCrisis ? "crisis-active" : ""}
-                          />
-                        )}
-                        
-                        {/* Singularity: Radiating particles */}
-                        {isSingularity && isPrimaryLine && (
-                          <>
-                            {[...Array(8)].map((_, i) => (
-                              <line
-                                key={`particle-${i}`}
-                                x1={s.coords.x}
-                                y1={lineY}
-                                x2={s.coords.x + Math.cos((i * Math.PI * 2) / 8) * (radius * 3)}
-                                y2={lineY + Math.sin((i * Math.PI * 2) / 8) * (radius * 3)}
-                                stroke="#22d3ee"
-                                strokeWidth={2}
-                                strokeOpacity={0.6}
-                                filter="url(#singularity-particles)"
-                              >
-                                <animate
-                                  attributeName="x2"
-                                  values={`${s.coords.x + Math.cos((i * Math.PI * 2) / 8) * (radius * 2)};${s.coords.x + Math.cos((i * Math.PI * 2) / 8) * (radius * 4)};${s.coords.x + Math.cos((i * Math.PI * 2) / 8) * (radius * 2)}`}
-                                  dur="2s"
-                                  repeatCount="indefinite"
-                                />
-                                <animate
-                                  attributeName="y2"
-                                  values={`${lineY + Math.sin((i * Math.PI * 2) / 8) * (radius * 2)};${lineY + Math.sin((i * Math.PI * 2) / 8) * (radius * 4)};${lineY + Math.sin((i * Math.PI * 2) / 8) * (radius * 2)}`}
-                                  dur="2s"
-                                  repeatCount="indefinite"
-                                />
-                              </line>
-                            ))}
-                          </>
-                        )}
-                        
-                        {/* Hub indicator */}
-                        {s.significance === 'hub' && (
-                          <circle
-                            cx={s.coords.x}
-                            cy={lineY}
-                            r={3}
-                            fill="#ffffff"
-                          />
-                        )}
-                      </g>
-                    );
-                  })}
-                  
-                  {/* Label - LOD aware: only show if zoomed in enough or active */}
-                  {shouldShowLabel && (currentZoom > 0.6 || isActive) && (
-                    <g className="pointer-events-none select-none">
-                      {(() => {
-                        const topY = Math.min(...visibleStationLines.map(l => lineYPositions[l]));
-                        const isDetailView = currentZoom > 0.6; // Re-define in this closure scope
-                        return (
-                          <>
-                            {/* Name label background */}
-                            <text
-                              x={s.coords.x}
-                              y={topY - 30}
-                              textAnchor="middle"
-                              fill="#000"
-                              fontSize={isActive ? 28 : 24}
-                              fontFamily="'JetBrains Mono', monospace"
-                              fontWeight="700"
-                              stroke="#000"
-                              strokeWidth={6}
-                              strokeLinejoin="round"
-                              opacity={0.5}
-                              className="station-label"
-                            >
-                              {s.name.length > 25 ? `${s.name.substring(0, 25)}…` : s.name}
-                            </text>
-                            {/* Name label */}
-                            <text
-                              x={s.coords.x}
-                              y={topY - 30}
-                              textAnchor="middle"
-                              fill="#ffffff"
-                              fontSize={isActive ? 28 : 24}
-                              fontFamily="'JetBrains Mono', monospace"
-                              fontWeight="700"
-                              className="station-label"
-                            >
-                              {s.name.length > 25 ? `${s.name.substring(0, 25)}…` : s.name}
-                            </text>
-                            {/* Year label - Only show if very zoomed in or active (LOD) */}
-                            {(isActive || currentZoom > 1.2) && (
-                              <text
-                                x={s.coords.x}
-                                y={topY - 6}
-                                textAnchor="middle"
-                                fill={colors[visibleStationLines[0]]}
-                                fontSize={20}
-                                fontFamily="'JetBrains Mono', monospace"
-                                fontWeight="600"
-                              >
-                                {s.yearLabel}
-                              </text>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </g>
-                  )}
-                </g>
-              );
-            })}
-          </svg>
+          <MapRenderer
+            svgRef={svgRef}
+            viewBox={viewBox}
+            paths={paths}
+            filteredStations={filteredStations}
+            visibleLines={visibleLines}
+            animationProgress={animationProgress}
+            narrativeFocusLine={narrativeFocusLine}
+            hoveredStation={hoveredStation}
+            selectedStation={selectedStation}
+            journeyMode={journeyMode}
+            journeyIndex={journeyIndex}
+            journeyStations={journeyStations}
+            searchQuery={searchQuery}
+            showAllLabels={showAllLabels}
+            currentZoom={currentZoom}
+            labelOffsets={labelOffsets}
+            timeMarkers={timeMarkers}
+            VIEWBOX_WIDTH={VIEWBOX_WIDTH}
+            VIEWBOX_HEIGHT={VIEWBOX_HEIGHT}
+            onStationHover={actions.hoverStation}
+            onStationSelect={actions.selectStation}
+            onStationJourneyGoTo={actions.journeyGoTo}
+          />
 
           {/* Minimap - Human-Centric Spatial Orientation */}
           {showUI && showMinimap && (
@@ -1536,7 +984,7 @@ const CivilizationMetroMap = () => {
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-mono text-cyan-400 uppercase tracking-widest">Overview</span>
                 <button
-                  onClick={() => setShowMinimap(false)}
+                  onClick={() => actions.toggleMinimap()}
                   className="text-cyan-400/60 hover:text-white"
                 >
                   <X size={14} />
@@ -1599,11 +1047,11 @@ const CivilizationMetroMap = () => {
                     svgPoint.y = e.clientY - rect.top;
                     const point = svgPoint.matrixTransform(svg.getScreenCTM().inverse());
                     
-                    setViewBox(prev => ({
-                      ...prev,
-                      x: Math.max(0, Math.min(VIEWBOX_WIDTH - prev.width, point.x - prev.width / 2)),
-                      y: Math.max(0, Math.min(VIEWBOX_HEIGHT - prev.height, point.y - prev.height / 2))
-                    }));
+                    actions.setViewBox({
+                      ...viewBox,
+                      x: Math.max(0, Math.min(VIEWBOX_WIDTH - viewBox.width, point.x - viewBox.width / 2)),
+                      y: Math.max(0, Math.min(VIEWBOX_HEIGHT - viewBox.height, point.y - viewBox.height / 2))
+                    });
                   }}
                 />
                 
@@ -1629,11 +1077,11 @@ const CivilizationMetroMap = () => {
                 onClick={() => {
                   const centerX = VIEWBOX_WIDTH / 2 - viewBox.width / 2;
                   const centerY = VIEWBOX_HEIGHT / 2 - viewBox.height / 2;
-                  setViewBox(prev => ({
-                    ...prev,
-                    x: Math.max(0, Math.min(VIEWBOX_WIDTH - prev.width, centerX)),
-                    y: Math.max(0, Math.min(VIEWBOX_HEIGHT - prev.height, centerY))
-                  }));
+                  actions.setViewBox({
+                    ...viewBox,
+                    x: Math.max(0, Math.min(VIEWBOX_WIDTH - viewBox.width, centerX)),
+                    y: Math.max(0, Math.min(VIEWBOX_HEIGHT - viewBox.height, centerY))
+                  });
                 }}
                 className="mt-2 w-full px-3 py-1.5 text-xs bg-cyan-900/50 hover:bg-cyan-900/70 text-cyan-300 rounded transition-colors"
               >
@@ -1642,39 +1090,6 @@ const CivilizationMetroMap = () => {
             </div>
           )}
 
-          {/* Search Results Panel */}
-          {searchQuery && filteredStations.length > 0 && (
-            <div className="absolute top-24 left-4 z-30 bg-neutral-900/95 backdrop-blur-md border border-cyan-900/50 rounded-lg p-4 shadow-2xl max-w-sm max-h-96 overflow-y-auto">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-bold text-white">Search Results ({filteredStations.length})</h3>
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="text-cyan-400/60 hover:text-white"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-              <div className="space-y-2">
-                {filteredStations.slice(0, 10).map(s => (
-                  <button
-                    key={s.id}
-                    onClick={() => {
-                      actions.centerOnStation(s);
-                    }}
-                    className="w-full text-left p-3 bg-neutral-800/50 hover:bg-neutral-800 rounded border border-neutral-700/50 hover:border-cyan-500/50 transition-colors"
-                  >
-                    <div className="font-semibold text-white text-sm mb-1">{s.name}</div>
-                    <div className="text-xs text-cyan-400">{s.yearLabel}</div>
-                  </button>
-                ))}
-                {filteredStations.length > 10 && (
-                  <p className="text-xs text-neutral-500 text-center pt-2">
-                    +{filteredStations.length - 10} more results
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* HIGH PRIORITY: Sticky Timeline Axis - HTML Overlay */}
           {showUI && (
@@ -1735,13 +1150,19 @@ const CivilizationMetroMap = () => {
         </div>
 
         {/* --- Info Sidebar --- */}
+        {/* HIGH PRIORITY: Mobile-responsive sidebar with bottom-sheet behavior */}
         <div 
           className={`
-            absolute right-0 top-0 h-full w-full md:w-[500px] 
-            bg-neutral-950/97 backdrop-blur-xl border-l border-cyan-900/50 
+            absolute right-0 
+            ${activeData ? 'bottom-0 md:top-0 md:bottom-auto' : 'bottom-[-100vh] md:top-0 md:bottom-auto'}
+            h-[80vh] md:h-full
+            w-full md:w-[420px] max-w-md
+            bg-neutral-950/97 backdrop-blur-xl 
+            border-t md:border-t-0 md:border-l border-cyan-900/50
+            rounded-t-2xl md:rounded-none
             shadow-[-10px_0_30px_rgba(0,0,0,0.9)] z-30
             transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
-            ${activeData ? 'translate-x-0' : 'translate-x-full'}
+            ${activeData ? 'translate-y-0 md:translate-x-0' : 'translate-y-full md:translate-x-full'}
           `}
         >
           {activeData && (
