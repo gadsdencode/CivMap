@@ -15,6 +15,7 @@ const MapRenderer = memo(function MapRenderer({
   svgRef,
   viewBox,
   paths,
+  stations,
   filteredStations,
   visibleLines,
   animationProgress,
@@ -194,6 +195,31 @@ const MapRenderer = memo(function MapRenderer({
           <stop offset="100%" stopColor="#22d3ee" stopOpacity="1" />
           <animate attributeName="y2" values="0%;100%;0%" dur="3s" repeatCount="indefinite" />
         </linearGradient>
+        
+        {/* Crisis Glow Filter for SVG paths (metro lines) */}
+        <filter id="crisis-glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="3" result="blur1">
+            <animate
+              attributeName="stdDeviation"
+              values="3;6;3"
+              dur="2s"
+              repeatCount="indefinite"
+            />
+          </feGaussianBlur>
+          <feGaussianBlur stdDeviation="2" result="blur2">
+            <animate
+              attributeName="stdDeviation"
+              values="2;4;2"
+              dur="2s"
+              repeatCount="indefinite"
+            />
+          </feGaussianBlur>
+          <feMerge>
+            <feMergeNode in="blur1"/>
+            <feMergeNode in="blur2"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
       </defs>
 
       {/* Time Axis */}
@@ -238,34 +264,104 @@ const MapRenderer = memo(function MapRenderer({
         </text>
       </g>
 
-      {/* Metro Lines - Performance-First with Narrative Focus */}
-      <MetroLine
-        pathData={paths.orange}
-        lineConfig={LINES.Philosophy}
-        animationProgress={animationProgress}
-        isVisible={visibleLines.philosophy}
-        isNarrativeFocus={narrativeFocusLine === 'philosophy'}
-        isCrisisMode={false}
-      />
-      
-      <MetroLine
-        pathData={paths.purple}
-        lineConfig={LINES.Empire}
-        animationProgress={animationProgress}
-        isVisible={visibleLines.empire}
-        isNarrativeFocus={narrativeFocusLine === 'empire'}
-        isCrisisMode={false}
-      />
+      {/* Causal Link Layer - Dependency curves between related stations */}
+      {/* Render connections from all stations, but only show if both source and target are visible */}
+      <g className="causal-links" opacity="0.2">
+        {stations.map((station) => {
+          if (!station.connections || station.connections.length === 0) return null;
+          
+          // Check if source station is visible (in filteredStations)
+          const isSourceVisible = filteredStations.some(s => s.id === station.id);
+          if (!isSourceVisible) return null;
+          
+          return station.connections.map((conn, idx) => {
+            // Find target in full stations array (not filtered) to ensure we can always resolve it
+            const targetStation = stations.find(s => s.id === conn.targetId);
+            if (!targetStation) return null;
+            
+            // Only show connection if target is also visible
+            const isTargetVisible = filteredStations.some(s => s.id === targetStation.id);
+            if (!isTargetVisible) return null;
+            
+            // Get primary line Y positions for both stations
+            const sourcePrimaryLine = station.lines[0];
+            const targetPrimaryLine = targetStation.lines[0];
+            const sourceY = lineYPositions[sourcePrimaryLine] || station.coords.y;
+            const targetY = lineYPositions[targetPrimaryLine] || targetStation.coords.y;
+            
+            // Calculate control points for smooth Bézier curve
+            // Control points offset horizontally to create smooth arc
+            const dx = targetStation.coords.x - station.coords.x;
+            const controlOffsetX = Math.abs(dx) * 0.3; // 30% of horizontal distance
+            
+            const x1 = station.coords.x;
+            const y1 = sourceY;
+            const cx1 = station.coords.x + controlOffsetX;
+            const cy1 = sourceY;
+            const cx2 = targetStation.coords.x - controlOffsetX;
+            const cy2 = targetY;
+            const x2 = targetStation.coords.x;
+            const y2 = targetY;
+            
+            // Create Bézier curve path
+            const pathData = `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
+            
+            return (
+              <path
+                key={`${station.id}-${conn.targetId}-${idx}`}
+                d={pathData}
+                stroke="rgba(255, 255, 255, 0.2)"
+                strokeWidth="2"
+                fill="none"
+                strokeDasharray="8,4"
+                className="pointer-events-none"
+              />
+            );
+          });
+        })}
+      </g>
 
-      <MetroLine
-        // Handle object structure for braided lines or string for simple lines
-        pathData={typeof paths.green === 'string' ? paths.green : paths.green.main}
-        lineConfig={LINES.Population}
-        animationProgress={animationProgress}
-        isVisible={visibleLines.population}
-        isNarrativeFocus={narrativeFocusLine === 'population'}
-        isCrisisMode={false}
-      />
+      {/* Metro Lines - Performance-First with Narrative Focus */}
+      {/* Check if lines have crisis stations to enable glow effect */}
+      {(() => {
+        const hasCrisisOnLine = (lineName) => {
+          return stations.some(s => 
+            s.significance === 'crisis' && s.lines.includes(lineName)
+          );
+        };
+        
+        return (
+          <>
+            <MetroLine
+              pathData={paths.orange}
+              lineConfig={LINES.Philosophy}
+              animationProgress={animationProgress}
+              isVisible={visibleLines.philosophy}
+              isNarrativeFocus={narrativeFocusLine === 'philosophy'}
+              isCrisisMode={hasCrisisOnLine('Philosophy')}
+            />
+            
+            <MetroLine
+              pathData={paths.purple}
+              lineConfig={LINES.Empire}
+              animationProgress={animationProgress}
+              isVisible={visibleLines.empire}
+              isNarrativeFocus={narrativeFocusLine === 'empire'}
+              isCrisisMode={hasCrisisOnLine('Empire')}
+            />
+
+            <MetroLine
+              // Handle object structure for braided lines or string for simple lines
+              pathData={typeof paths.green === 'string' ? paths.green : paths.green.main}
+              lineConfig={LINES.Population}
+              animationProgress={animationProgress}
+              isVisible={visibleLines.population}
+              isNarrativeFocus={narrativeFocusLine === 'population'}
+              isCrisisMode={hasCrisisOnLine('Population')}
+            />
+          </>
+        );
+      })()}
 
       <MetroLine
         pathData={paths.red}
@@ -276,14 +372,24 @@ const MapRenderer = memo(function MapRenderer({
         isCrisisMode={true} // War line always has crisis mode for visual impact
       />
 
-      <MetroLine
-        pathData={paths.blue}
-        lineConfig={LINES.Tech}
-        animationProgress={animationProgress}
-        isVisible={visibleLines.tech}
-        isNarrativeFocus={narrativeFocusLine === 'tech'}
-        isCrisisMode={false}
-      />
+      {(() => {
+        const hasCrisisOnLine = (lineName) => {
+          return stations.some(s => 
+            s.significance === 'crisis' && s.lines.includes(lineName)
+          );
+        };
+        
+        return (
+          <MetroLine
+            pathData={paths.blue}
+            lineConfig={LINES.Tech}
+            animationProgress={animationProgress}
+            isVisible={visibleLines.tech}
+            isNarrativeFocus={narrativeFocusLine === 'tech'}
+            isCrisisMode={hasCrisisOnLine('Tech')}
+          />
+        );
+      })()}
 
       {/* PROPER METRO MAP: Render each station ON ITS LINE(S) at the line's Y position */}
       {/* For multi-line stations, render a marker on EACH line */}

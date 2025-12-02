@@ -957,6 +957,7 @@ const CivilizationMetroMap = () => {
             svgRef={svgRef}
             viewBox={viewBox}
             paths={paths}
+            stations={stations}
             filteredStations={filteredStations}
             visibleLines={visibleLines}
             animationProgress={animationProgress}

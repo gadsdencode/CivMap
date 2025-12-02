@@ -117,18 +117,28 @@ svg {
 
 /* ===== Performance-First Animations ===== */
 
-/* Optimized Glitch Effect (Replaces SVG feTurbulence) */
-@keyframes shake-glitch {
-  0% { transform: translate(0, 0); }
-  20% { transform: translate(-2px, 2px); }
-  40% { transform: translate(-2px, -2px); }
-  60% { transform: translate(2px, 2px); }
-  80% { transform: translate(2px, -2px); }
-  100% { transform: translate(0, 0); }
+/* Crisis Glow Effect - smooth pulsing glow to indicate activity/interest */
+@keyframes crisis-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 4px currentColor);
+    opacity: 0.9;
+  }
+  50% {
+    filter: drop-shadow(0 0 12px currentColor) drop-shadow(0 0 8px currentColor);
+    opacity: 1;
+  }
 }
 
-.crisis-active {
-  animation: shake-glitch 0.2s cubic-bezier(.36,.07,.19,.97) infinite;
+/* Apply glow effect ONLY to crisis station markers (event circles), not metro lines */
+.crisis-active circle {
+  animation: crisis-glow 2s ease-in-out infinite;
+  will-change: filter, opacity;
+}
+
+/* Station marker group with crisis - ensure circles inside get the glow */
+.station-marker.crisis-active circle {
+  animation: crisis-glow 2s ease-in-out infinite;
+  will-change: filter, opacity;
 }
 
 /* Narrative Focus Pulse */

@@ -461,7 +461,10 @@ const STATION_DATA = [
       insight: "Chemical power harnessed. Warfare transforms forever."
     },
     details: "Gunpowder invented in China. Will transform warfare and technology.",
-    population: "~250 Million"
+    population: "~250 Million",
+    connections: [
+      { targetId: 'fall-rome', type: 'causal' } // Gunpowder technology eventually contributes to the fall of empires
+    ]
   },
   {
     id: 'vikings',
@@ -557,7 +560,11 @@ const STATION_DATA = [
       insight: "Information revolution begins. The map becomes reproducible."
     },
     details: "First major book printed with movable type. Information age begins.",
-    population: "~400 Million"
+    population: "~400 Million",
+    connections: [
+      { targetId: 'renaissance', type: 'causal' }, // Printing enables Renaissance ideas to spread
+      { targetId: 'scientific-rev', type: 'causal' } // Printing enables scientific revolution
+    ]
   },
   {
     id: 'printing',
@@ -573,7 +580,10 @@ const STATION_DATA = [
       insight: "Information spreads exponentially. The map of the world becomes accessible to all."
     },
     details: "Just prior to the Columbian Exchange. Ensures maps of the new world are distributed to everyone.",
-    population: "~400 Million"
+    population: "~400 Million",
+    connections: [
+      { targetId: 'columbian', type: 'causal' } // Printing enables maps of new world to spread
+    ]
   },
   {
     id: 'columbian',
@@ -638,7 +648,10 @@ const STATION_DATA = [
       insight: "Energy harnessed. The map shows new sources of power."
     },
     details: "Newcomen's steam engine. First practical steam power.",
-    population: "~650 Million"
+    population: "~650 Million",
+    connections: [
+      { targetId: 'industrial', type: 'causal' } // Steam engine enables the Industrial Revolution
+    ]
   },
   {
     id: 'watt',
@@ -654,7 +667,10 @@ const STATION_DATA = [
       insight: "Mechanical power multiplies human capability. The train gains its engine."
     },
     details: "Provides the power for the Industrial Grand Central station ahead.",
-    population: "~750 Million"
+    population: "~750 Million",
+    connections: [
+      { targetId: 'industrial', type: 'causal' } // Watt's engine directly powers Industrial Revolution
+    ]
   },
   {
     id: 'french-rev',
@@ -848,7 +864,10 @@ const STATION_DATA = [
       insight: "Networking begins. The map shows digital connections."
     },
     details: "ARPANET first message. Internet age begins.",
-    population: "~3.6 Billion"
+    population: "~3.6 Billion",
+    connections: [
+      { targetId: 'web', type: 'causal' } // ARPANET leads to the World Wide Web
+    ]
   },
   {
     id: 'pc',
@@ -864,7 +883,11 @@ const STATION_DATA = [
       insight: "Computing becomes accessible. The map shows personal technology."
     },
     details: "Apple II and Commodore PET. Personal computing revolution.",
-    population: "~4.2 Billion"
+    population: "~4.2 Billion",
+    connections: [
+      { targetId: 'web', type: 'causal' }, // PCs enable the web
+      { targetId: 'smartphone', type: 'causal' } // PC technology leads to smartphones
+    ]
   },
   {
     id: 'web',
