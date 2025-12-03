@@ -24,7 +24,13 @@ const ICON_TYPES = {
   ATOM: 'atom',
   GAUGE: 'gauge',
   PRINTER: 'printer',
-  ALERT: 'alertTriangle'
+  ALERT: 'alertTriangle',
+  // NEW ICONS
+  FEATHER: 'feather',    // For arts/culture
+  CROSSHAIR: 'crosshair', // For specific conflicts
+  ANCHOR: 'anchor',      // For naval/exploration
+  LIGHTBULB: 'lightbulb', // For electricity/ideas
+  PLANE: 'send'          // For flight (using 'send' or paper plane icon)
 };
 
 // Raw station definitions - the historical data
@@ -79,6 +85,25 @@ const STATION_DATA = [
     population: "~7 Million"
   },
   {
+    id: 'agriculture-spread',
+    name: 'Agricultural Revolution',
+    year: -5000,
+    yearLabel: '5,000 BCE',
+    lines: ['Population', 'Tech'],
+    significance: 'major',
+    iconType: ICON_TYPES.GLOBE,
+    narrative: {
+      visual: "The Green Line thickens and spreads globally. The map turns verdant.",
+      atmosphere: "The rhythm of seasons. The clearing of forests.",
+      insight: "Farming spreads to Europe and Asia. The population floor raises permanently."
+    },
+    details: "Agriculture is no longer local—it is the dominant human mode of existence.",
+    population: "~15 Million",
+    connections: [
+      { targetId: 'mesopotamia', type: 'causal' }
+    ]
+  },
+  {
     id: 'mesopotamia',
     name: 'Mesopotamian Cities',
     year: -4000,
@@ -93,22 +118,6 @@ const STATION_DATA = [
     },
     details: "First true cities in Mesopotamia. Urban civilization takes root.",
     population: "~7 Million"
-  },
-  {
-    id: 'egypt',
-    name: 'Ancient Egypt',
-    year: -3100,
-    yearLabel: '3,100 BCE',
-    lines: ['Empire', 'Tech'],
-    significance: 'major',
-    iconType: ICON_TYPES.CASTLE,
-    narrative: {
-      visual: "The Purple Line solidifies. Pyramids rise along the tracks.",
-      atmosphere: "The weight of stone. The flow of the Nile.",
-      insight: "First great empire. Monumental architecture defines the landscape."
-    },
-    details: "Unification of Upper and Lower Egypt. The first pharaonic dynasty.",
-    population: "~1 Million"
   },
   {
     id: 'uruk',
@@ -158,6 +167,22 @@ const STATION_DATA = [
     },
     details: "One stop from Uruk Central. The acceleration begins.",
     population: "~1.5 Million"
+  },
+  {
+    id: 'egypt',
+    name: 'Ancient Egypt',
+    year: -3100,
+    yearLabel: '3,100 BCE',
+    lines: ['Empire', 'Tech'],
+    significance: 'major',
+    iconType: ICON_TYPES.CASTLE,
+    narrative: {
+      visual: "The Purple Line solidifies. Pyramids rise along the tracks.",
+      atmosphere: "The weight of stone. The flow of the Nile.",
+      insight: "First great empire. Monumental architecture defines the landscape."
+    },
+    details: "Unification of Upper and Lower Egypt. The first pharaonic dynasty.",
+    population: "~1 Million"
   },
   {
     id: 'bronze',
@@ -288,6 +313,22 @@ const STATION_DATA = [
     population: "~100 Million"
   },
   {
+    id: 'rome',
+    name: 'Roman Republic',
+    year: -509,
+    yearLabel: '509 BCE',
+    lines: ['Empire', 'Philosophy'],
+    significance: 'major',
+    iconType: ICON_TYPES.CASTLE,
+    narrative: {
+      visual: "The Purple Line gains structure. Republic emerges.",
+      atmosphere: "The balance of power. The rule of law.",
+      insight: "New form of governance. The map shows political innovation."
+    },
+    details: "Roman Republic established. New model of government.",
+    population: "~100 Million"
+  },
+  {
     id: 'classical',
     name: 'Classical Era',
     year: -500,
@@ -336,22 +377,6 @@ const STATION_DATA = [
     population: "~200 Million"
   },
   {
-    id: 'rome',
-    name: 'Roman Republic',
-    year: -509,
-    yearLabel: '509 BCE',
-    lines: ['Empire', 'Philosophy'],
-    significance: 'major',
-    iconType: ICON_TYPES.CASTLE,
-    narrative: {
-      visual: "The Purple Line gains structure. Republic emerges.",
-      atmosphere: "The balance of power. The rule of law.",
-      insight: "New form of governance. The map shows political innovation."
-    },
-    details: "Roman Republic established. New model of government.",
-    population: "~100 Million"
-  },
-  {
     id: 'jesus',
     name: 'Jesus & Christianity',
     year: 0,
@@ -382,6 +407,22 @@ const STATION_DATA = [
     },
     details: "Han Dynasty golden age. Silk Road trade flourishes.",
     population: "~250 Million"
+  },
+  {
+    id: 'pax-romana',
+    name: 'Pax Romana',
+    year: 117,
+    yearLabel: '117 CE', 
+    lines: ['Empire', 'Tech'],
+    significance: 'major',
+    iconType: ICON_TYPES.CASTLE,
+    narrative: {
+      visual: "The Purple Line stabilizes into a solid, unbreaking beam across the West.",
+      atmosphere: "Concrete, aqueducts, and safe roads. The stillness of order.",
+      insight: "Hegemony creates a safe zone for trade and technology to incubate."
+    },
+    details: "The Roman Empire at its greatest territorial extent. Unmatched infrastructure.",
+    population: "~220 Million"
   },
   {
     id: 'fall-rome',
@@ -432,6 +473,22 @@ const STATION_DATA = [
     population: "~250 Million"
   },
   {
+    id: 'vikings',
+    name: 'Viking Age',
+    year: 793,
+    yearLabel: '793 CE',
+    lines: ['War', 'Tech'],
+    significance: 'major',
+    iconType: ICON_TYPES.SKULL,
+    narrative: {
+      visual: "The Red Line surges northward. Raiders reshape the map.",
+      atmosphere: "The sound of oars. The fear of the unknown.",
+      insight: "Exploration through conquest. The map expands northward."
+    },
+    details: "Viking raids begin. Exploration and trade across the North Atlantic.",
+    population: "~250 Million"
+  },
+  {
     id: 'islamic-golden',
     name: 'Islamic Golden Age',
     year: 800,
@@ -463,24 +520,40 @@ const STATION_DATA = [
     details: "Gunpowder invented in China. Will transform warfare and technology.",
     population: "~250 Million",
     connections: [
-      { targetId: 'fall-rome', type: 'causal' } // Gunpowder technology eventually contributes to the fall of empires
+      { targetId: 'fall-rome', type: 'causal' } 
     ]
   },
   {
-    id: 'vikings',
-    name: 'Viking Age',
-    year: 793,
-    yearLabel: '793 CE',
-    lines: ['War', 'Tech'],
+    id: 'crusades',
+    name: 'The Crusades',
+    year: 1095,
+    yearLabel: '1095 CE',
+    lines: ['War', 'Philosophy', 'Empire'],
     significance: 'major',
-    iconType: ICON_TYPES.SKULL,
+    iconType: ICON_TYPES.CROSSHAIR,
     narrative: {
-      visual: "The Red Line surges northward. Raiders reshape the map.",
-      atmosphere: "The sound of oars. The fear of the unknown.",
-      insight: "Exploration through conquest. The map expands northward."
+      visual: "The Orange Lines (Faith) collide violently. The Red Line sparks.",
+      atmosphere: "The heat of desert armor. The clash of civilizations.",
+      insight: "Religious fervor militarized. East and West collide, exchanging blood and ideas."
     },
-    details: "Viking raids begin. Exploration and trade across the North Atlantic.",
-    population: "~250 Million"
+    details: "First Crusade launched. Centuries of conflict that paradoxically reopens trade routes.",
+    population: "~300 Million"
+  },
+  {
+    id: 'mongol',
+    name: 'Mongol Empire',
+    year: 1206,
+    yearLabel: '1206 CE',
+    lines: ['Empire', 'War'],
+    significance: 'major',
+    iconType: ICON_TYPES.CASTLE,
+    narrative: {
+      visual: "The Purple Line explodes. Largest land empire.",
+      atmosphere: "The thunder of hooves. The unity of the steppe.",
+      insight: "Empire reaches unprecedented scale. The map shows continental unity."
+    },
+    details: "Genghis Khan unites Mongols. Largest contiguous empire in history.",
+    population: "~400 Million"
   },
   {
     id: 'magna-carta',
@@ -499,20 +572,20 @@ const STATION_DATA = [
     population: "~400 Million"
   },
   {
-    id: 'mongol',
-    name: 'Mongol Empire',
-    year: 1206,
-    yearLabel: '1206 CE',
-    lines: ['Empire', 'War'],
-    significance: 'major',
+    id: 'mali-empire',
+    name: 'Mali Empire',
+    year: 1324,
+    yearLabel: '1324 CE',
+    lines: ['Empire', 'Tech'],
+    significance: 'minor',
     iconType: ICON_TYPES.CASTLE,
     narrative: {
-      visual: "The Purple Line explodes. Largest land empire.",
-      atmosphere: "The thunder of hooves. The unity of the steppe.",
-      insight: "Empire reaches unprecedented scale. The map shows continental unity."
+      visual: "The Purple Line glows gold in Africa. A caravan stretches to the horizon.",
+      atmosphere: "The shimmer of gold dust. The scholarship of Timbuktu.",
+      insight: "Wealth and knowledge centralized in West Africa. Global trade networks expand south."
     },
-    details: "Genghis Khan unites Mongols. Largest contiguous empire in history.",
-    population: "~400 Million"
+    details: "Mansa Musa's pilgrimage. Timbuktu becomes a center of Islamic learning.",
+    population: "~350 Million"
   },
   {
     id: 'black-death',
@@ -547,26 +620,6 @@ const STATION_DATA = [
     population: "~350 Million"
   },
   {
-    id: 'gutenberg',
-    name: 'Gutenberg Bible',
-    year: 1455,
-    yearLabel: '1455 CE',
-    lines: ['Tech', 'Philosophy'],
-    significance: 'major',
-    iconType: ICON_TYPES.PRINTER,
-    narrative: {
-      visual: "The Blue Line multiplies. Knowledge becomes mass-produced.",
-      atmosphere: "The smell of ink. The weight of books.",
-      insight: "Information revolution begins. The map becomes reproducible."
-    },
-    details: "First major book printed with movable type. Information age begins.",
-    population: "~400 Million",
-    connections: [
-      { targetId: 'renaissance', type: 'causal' }, // Printing enables Renaissance ideas to spread
-      { targetId: 'scientific-rev', type: 'causal' } // Printing enables scientific revolution
-    ]
-  },
-  {
     id: 'printing',
     name: 'Printing Press',
     year: 1440,
@@ -582,7 +635,27 @@ const STATION_DATA = [
     details: "Just prior to the Columbian Exchange. Ensures maps of the new world are distributed to everyone.",
     population: "~400 Million",
     connections: [
-      { targetId: 'columbian', type: 'causal' } // Printing enables maps of new world to spread
+      { targetId: 'columbian', type: 'causal' } 
+    ]
+  },
+  {
+    id: 'gutenberg',
+    name: 'Gutenberg Bible',
+    year: 1455,
+    yearLabel: '1455 CE',
+    lines: ['Tech', 'Philosophy'],
+    significance: 'major',
+    iconType: ICON_TYPES.PRINTER,
+    narrative: {
+      visual: "The Blue Line multiplies. Knowledge becomes mass-produced.",
+      atmosphere: "The smell of ink. The weight of books.",
+      insight: "Information revolution begins. The map becomes reproducible."
+    },
+    details: "First major book printed with movable type. Information age begins.",
+    population: "~400 Million",
+    connections: [
+      { targetId: 'renaissance', type: 'causal' }, 
+      { targetId: 'scientific-rev', type: 'causal' }
     ]
   },
   {
@@ -601,6 +674,22 @@ const STATION_DATA = [
     },
     details: "The Printing Press station just prior ensures that maps of this new world are distributed to everyone.",
     population: "~500 Million (dip then surge)"
+  },
+  {
+    id: 'reformation',
+    name: 'The Reformation',
+    year: 1517,
+    yearLabel: '1517 CE',
+    lines: ['Philosophy', 'War'],
+    significance: 'major',
+    iconType: ICON_TYPES.FEATHER,
+    narrative: {
+      visual: "The Orange Line splinters into fractal paths. Authority fractures.",
+      atmosphere: "The sound of hammering on a church door. The argument in the tavern.",
+      insight: "The monopoly on truth is broken. Individual interpretation begins."
+    },
+    details: "Martin Luther's 95 Theses. Religious wars follow, but so does literacy.",
+    population: "~500 Million"
   },
   {
     id: 'scientific-rev',
@@ -650,7 +739,7 @@ const STATION_DATA = [
     details: "Newcomen's steam engine. First practical steam power.",
     population: "~650 Million",
     connections: [
-      { targetId: 'industrial', type: 'causal' } // Steam engine enables the Industrial Revolution
+      { targetId: 'industrial', type: 'causal' } 
     ]
   },
   {
@@ -669,7 +758,8 @@ const STATION_DATA = [
     details: "Provides the power for the Industrial Grand Central station ahead.",
     population: "~750 Million",
     connections: [
-      { targetId: 'industrial', type: 'causal' } // Watt's engine directly powers Industrial Revolution
+      { targetId: 'industrial', type: 'causal' },
+      { targetId: 'electricity', type: 'causal' }
     ]
   },
   {
@@ -738,6 +828,22 @@ const STATION_DATA = [
     population: "~1.2 Billion"
   },
   {
+    id: 'communist-manifesto',
+    name: 'Marx & Labor',
+    year: 1848,
+    yearLabel: '1848 CE',
+    lines: ['Philosophy', 'Empire'],
+    significance: 'major',
+    iconType: ICON_TYPES.BOOK,
+    narrative: {
+      visual: "The Orange Line turns sharp Red. A new structural tension appears on the map.",
+      atmosphere: "Steam, soot, and the whisper of revolution.",
+      insight: "Industrial capitalism births its own critique. The 20th century conflict is seeded here."
+    },
+    details: "Publication of the Communist Manifesto. The Year of Revolutions.",
+    population: "~1.2 Billion"
+  },
+  {
     id: 'darwin',
     name: 'Origin of Species',
     year: 1859,
@@ -754,6 +860,57 @@ const STATION_DATA = [
     population: "~1.3 Billion"
   },
   {
+    id: 'electricity',
+    name: 'The Electric Spark',
+    year: 1879,
+    yearLabel: '1879 CE',
+    lines: ['Tech'],
+    significance: 'major',
+    iconType: ICON_TYPES.LIGHTBULB,
+    narrative: {
+      visual: "The Blue Line starts to glow. The Metro tunnels are finally lit.",
+      atmosphere: "The hum of the filament. The banishment of night.",
+      insight: "Humanity conquers the cycle of day and night. Productivity doubles."
+    },
+    details: "Commercial lightbulb invented. The grid begins to form.",
+    population: "~1.4 Billion"
+  },
+  {
+    id: 'germ-theory',
+    name: 'Germ Theory',
+    year: 1880,
+    yearLabel: '1880 CE',
+    lines: ['Tech', 'Population'],
+    significance: 'major',
+    iconType: ICON_TYPES.USERS,
+    narrative: {
+      visual: "The Green Line (Population) stops fluctuating and begins a steady vertical climb.",
+      atmosphere: "Sterile white surfaces. The microscope's focus.",
+      insight: "We see the invisible enemy. Infant mortality plummets."
+    },
+    details: "Pasteur and Koch. Sanitation and sterilization revolutionize survival.",
+    population: "~1.5 Billion"
+  },
+  {
+    id: 'flight',
+    name: 'Aviation',
+    year: 1903,
+    yearLabel: '1903 CE',
+    lines: ['Tech'],
+    significance: 'major',
+    iconType: ICON_TYPES.PLANE,
+    narrative: {
+      visual: "The Blue Line lifts off the map entirely. The Z-axis is unlocked.",
+      atmosphere: "Wind on canvas wings. The view from above.",
+      insight: "Gravity is overcome. The world shrinks not just in time, but in space."
+    },
+    details: "Wright Brothers first flight. Warfare and travel become 3-dimensional.",
+    population: "~1.7 Billion",
+    connections: [
+      { targetId: 'space', type: 'causal' }
+    ]
+  },
+  {
     id: 'ww1',
     name: 'World War I',
     year: 1914,
@@ -768,6 +925,38 @@ const STATION_DATA = [
     },
     details: "World War I begins. First industrial-scale global war.",
     population: "~1.8 Billion"
+  },
+  {
+    id: 'suffrage',
+    name: 'Women\'s Suffrage',
+    year: 1920,
+    yearLabel: '1920 CE',
+    lines: ['Philosophy', 'Population'],
+    significance: 'major',
+    iconType: ICON_TYPES.USERS,
+    narrative: {
+      visual: "The Green Line integrates. Half the population officially enters the map.",
+      atmosphere: "Sashes, marches, and the ballot box.",
+      insight: "Political agency expands to women. The definition of 'citizen' completes."
+    },
+    details: "19th Amendment (US) and global movements. Civic participation doubles.",
+    population: "~1.9 Billion"
+  },
+  {
+    id: 'penicillin',
+    name: 'Penicillin',
+    year: 1928,
+    yearLabel: '1928 CE',
+    lines: ['Tech', 'Population'],
+    significance: 'major',
+    iconType: ICON_TYPES.SETTINGS,
+    narrative: {
+      visual: "The Blue Line heals. Medicine transforms.",
+      atmosphere: "The hope of cure. The defeat of disease.",
+      insight: "Medical revolution. The map shows longer, healthier lives."
+    },
+    details: "Penicillin discovered. Antibiotic age begins.",
+    population: "~2 Billion"
   },
   {
     id: 'crisis',
@@ -787,22 +976,6 @@ const STATION_DATA = [
     population: "~2.5 Billion (70M lost)"
   },
   {
-    id: 'penicillin',
-    name: 'Penicillin',
-    year: 1928,
-    yearLabel: '1928 CE',
-    lines: ['Tech', 'Population'],
-    significance: 'major',
-    iconType: ICON_TYPES.SETTINGS,
-    narrative: {
-      visual: "The Blue Line heals. Medicine transforms.",
-      atmosphere: "The hope of cure. The defeat of disease.",
-      insight: "Medical revolution. The map shows longer, healthier lives."
-    },
-    details: "Penicillin discovered. Antibiotic age begins.",
-    population: "~2 Billion"
-  },
-  {
     id: 'atomic',
     name: 'The Atomic Station',
     year: 1945,
@@ -817,6 +990,25 @@ const STATION_DATA = [
     },
     details: "Los Alamos. The Blue Line becomes an existential threat. Passengers question the ride.",
     population: "~2.5 Billion"
+  },
+  {
+    id: 'transistor',
+    name: 'The Transistor',
+    year: 1947,
+    yearLabel: '1947 CE',
+    lines: ['Tech'],
+    significance: 'major',
+    iconType: ICON_TYPES.CPU,
+    narrative: {
+      visual: "The Blue Line pixelates. The machinery shrinks to microscopic scale.",
+      atmosphere: "Silicon and precision. The quiet before the digital storm.",
+      insight: "The switch that changes everything. The building block of the modern world."
+    },
+    details: "Invention at Bell Labs. The seed of the Information Age.",
+    population: "~2.5 Billion",
+    connections: [
+      { targetId: 'pc', type: 'causal' }
+    ]
   },
   {
     id: 'dna',
@@ -849,6 +1041,22 @@ const STATION_DATA = [
     },
     details: "Sputnik launched. Space age begins.",
     population: "~2.8 Billion"
+  },
+  {
+    id: 'moon-landing',
+    name: 'Apollo 11',
+    year: 1969,
+    yearLabel: '1969 CE',
+    lines: ['Tech', 'Empire', 'Philosophy'],
+    significance: 'major',
+    iconType: ICON_TYPES.GLOBE,
+    narrative: {
+      visual: "A single bright point away from the main track. The Earth seen as one unit.",
+      atmosphere: "Static, gray dust, and the 'Blue Marble' rising.",
+      insight: "The Species Perspective. We look back at the map and see it is a single ship."
+    },
+    details: "Humans walk on the moon. The peak of the Cold War tech race.",
+    population: "~3.6 Billion"
   },
   {
     id: 'internet',
@@ -888,6 +1096,22 @@ const STATION_DATA = [
       { targetId: 'web', type: 'causal' }, // PCs enable the web
       { targetId: 'smartphone', type: 'causal' } // PC technology leads to smartphones
     ]
+  },
+  {
+    id: 'berlin-wall-fall',
+    name: 'Fall of the Wall',
+    year: 1989,
+    yearLabel: '1989 CE',
+    lines: ['Empire', 'Philosophy'],
+    significance: 'major',
+    iconType: ICON_TYPES.CASTLE, 
+    narrative: {
+      visual: "The Purple Line reconnects. The split tracks merge back into one global system.",
+      atmosphere: "Concrete dust, cheering crowds, and the end of the binary world.",
+      insight: "The Cold War ends. Globalization begins in earnest."
+    },
+    details: "Berlin Wall falls. The dissolution of the Soviet Union follows.",
+    population: "~5.2 Billion"
   },
   {
     id: 'web',
@@ -938,6 +1162,38 @@ const STATION_DATA = [
     population: "~6.7 Billion"
   },
   {
+    id: 'social-media',
+    name: 'Social Network',
+    year: 2010,
+    yearLabel: '2010 CE',
+    lines: ['Tech', 'Philosophy', 'Population'],
+    significance: 'minor',
+    iconType: ICON_TYPES.USERS,
+    narrative: {
+      visual: "The lines tangle. Every passenger is connected to every other passenger.",
+      atmosphere: "The dopamine hit of the like button. The noise of a billion voices.",
+      insight: "Connectivity turns into a hive mind. Truth becomes subjective to the algorithm."
+    },
+    details: "Mass adoption of Facebook/Twitter/Instagram. The Arab Spring. The psychological shift.",
+    population: "~7 Billion"
+  },
+  {
+    id: 'crypto-ai-start',
+    name: 'Decentralization & AI',
+    year: 2017,
+    yearLabel: '2017 CE',
+    lines: ['Tech', 'Empire'],
+    significance: 'minor',
+    iconType: ICON_TYPES.CPU,
+    narrative: {
+      visual: "The Purple Line (Empire/Money) flickers. The Blue Line begins to generate its own rails.",
+      atmosphere: "Mining rigs humming. Transformers training.",
+      insight: "Money and Intelligence—the two pillars of power—begin to decouple from human institutions."
+    },
+    details: "Bitcoin adoption rises. The 'Transformer' paper is published (birth of modern LLMs).",
+    population: "~7.6 Billion"
+  },
+  {
     id: 'singularity',
     name: 'Digital Singularity / AGI',
     year: 2025,
@@ -970,22 +1226,41 @@ const LINE_COLOR_MAP = {
 /**
  * Minimum X distance between station CENTERS on the same line.
  * Station markers are ~30-40px diameter. With hover effects and labels,
- * we need VERY generous spacing. VIEWBOX is 8000px wide, plenty of room.
+ * we need reasonable spacing without pushing stations off-screen.
  * 
- * MUST NEVER OVERLAP: Using 300px ensures clear separation even at low zoom.
+ * VIEWBOX is 8000px wide, but with ~60 stations and 5 lines,
+ * average spacing needs to allow for clustering in dense eras.
+ * 
+ * BALANCED: 150px allows ~50 stations per line while maintaining clickability.
+ * Too large (300px) pushes modern stations off the right edge.
  */
-const MIN_STATION_GAP = 300; // Minimum pixels between station centers on same line
+const MIN_STATION_GAP = 150; // Minimum pixels between station centers on same line
 
 // MEDIUM: Memoize processed stations to avoid recalculating collisions on every render
+// Cache is automatically invalidated on hot module reload during development
 let memoizedStations = null;
+
+/**
+ * Clear the memoized stations cache
+ * Call this if station data or coordinate system changes
+ */
+export function clearStationCache() {
+  memoizedStations = null;
+}
+
+// Auto-clear cache on hot reload for development
+if (import.meta.hot) {
+  import.meta.hot.accept(() => {
+    memoizedStations = null;
+  });
+}
 
 /**
  * Process raw station data into fully computed station objects
  * Computes coordinates, applies color based on primary line,
  * and resolves overlapping station positions using HORIZONTAL offsets
  * to keep stations on their respective metro lines
- * 
- * MEDIUM PRIORITY: Memoized to avoid expensive collision detection on every render
+ * * MEDIUM PRIORITY: Memoized to avoid expensive collision detection on every render
  * @returns {Array} Processed station array with computed coordinates, colors, and flattened narrative
  */
 export function processStations() {
@@ -1024,11 +1299,22 @@ export function processStations() {
 /**
  * Detect overlapping stations and apply HORIZONTAL offsets to separate them.
  * LINE-AWARE: For each line, ensures stations maintain MIN_STATION_GAP spacing.
- * Uses multiple passes across ALL lines to handle multi-line station cascading.
+ * 
+ * IMPROVED ALGORITHM:
+ * 1. Bidirectional spreading - pushes stations both left AND right from cluster centers
+ * 2. Boundary-aware - respects VIEWBOX limits during adjustment
+ * 3. Multi-pass convergence - handles multi-line station cascading
+ * 
  * @param {Array} stations - Array of stations with initial coordinates
  * @returns {Array} Stations with adjusted X coordinates to prevent overlap
  */
 function resolveStationCollisions(stations) {
+  // Boundary margins - leave room for station graphics and labels
+  const LEFT_MARGIN = 100;
+  const RIGHT_MARGIN = 200; // More margin on right for labels
+  const MAX_X = VIEWBOX.WIDTH - RIGHT_MARGIN;
+  const MIN_X = LEFT_MARGIN;
+  
   // Create a mutable copy with original X stored
   const mutableStations = stations.map(s => ({
     ...s,
@@ -1043,8 +1329,7 @@ function resolveStationCollisions(stations) {
   const lines = ['Tech', 'War', 'Population', 'Philosophy', 'Empire'];
   
   // Multiple global passes to handle multi-line station cascading
-  // A station on Tech+Philosophy might need adjustment on both lines
-  for (let globalPass = 0; globalPass < 20; globalPass++) {
+  for (let globalPass = 0; globalPass < 15; globalPass++) {
     let anyChanged = false;
     
     lines.forEach(line => {
@@ -1055,21 +1340,48 @@ function resolveStationCollisions(stations) {
       
       if (lineStations.length < 2) return;
       
-      // Check each adjacent pair
+      // IMPROVED: Bidirectional spreading from collision points
       for (let i = 1; i < lineStations.length; i++) {
         const prev = lineStations[i - 1];
         const curr = lineStations[i];
         const gap = curr.adjustedX - prev.adjustedX;
         
         if (gap < MIN_STATION_GAP) {
-          // Push current station (and all after it) right to maintain gap
-          const needed = MIN_STATION_GAP - gap + 1; // +1 for safety margin
+          const needed = MIN_STATION_GAP - gap;
           
-          // Push this station and cascade to all subsequent stations on this line
-          for (let j = i; j < lineStations.length; j++) {
-            lineStations[j].adjustedX += needed;
+          // Calculate how much room we have on each side
+          const roomOnLeft = prev.adjustedX - MIN_X;
+          const roomOnRight = MAX_X - curr.adjustedX;
+          
+          // Distribute the adjustment proportionally based on available room
+          const totalRoom = roomOnLeft + roomOnRight;
+          if (totalRoom > 0) {
+            const leftShare = Math.min(roomOnLeft, (roomOnLeft / totalRoom) * needed);
+            const rightShare = needed - leftShare;
+            
+            // Move previous stations left
+            if (leftShare > 0) {
+              for (let j = 0; j <= i - 1; j++) {
+                lineStations[j].adjustedX -= leftShare;
+              }
+            }
+            
+            // Move current and subsequent stations right
+            if (rightShare > 0) {
+              for (let j = i; j < lineStations.length; j++) {
+                lineStations[j].adjustedX += rightShare;
+              }
+            }
+            
+            anyChanged = true;
+          } else {
+            // No room - compress gaps proportionally
+            const compression = MIN_STATION_GAP * 0.6; // Allow tighter spacing
+            for (let j = i; j < lineStations.length; j++) {
+              lineStations[j].adjustedX += compression;
+            }
+            anyChanged = true;
           }
-          anyChanged = true;
         }
       }
     });
@@ -1077,15 +1389,18 @@ function resolveStationCollisions(stations) {
     if (!anyChanged) break; // All lines converged
   }
   
-  // Return stations with final adjusted X
-  return mutableStations.map(s => ({
-    ...s,
-    coords: {
-      x: Math.max(50, Math.min(VIEWBOX.WIDTH - 50, s.adjustedX)),
-      y: s.coords.y
-    },
-    wasOffset: Math.abs(s.adjustedX - s.originalX) > 1
-  }));
+  // Final clamping pass - ensure all stations are within bounds
+  return mutableStations.map(s => {
+    const clampedX = Math.max(MIN_X, Math.min(MAX_X, s.adjustedX));
+    return {
+      ...s,
+      coords: {
+        x: clampedX,
+        y: s.coords.y
+      },
+      wasOffset: Math.abs(clampedX - s.originalX) > 1
+    };
+  });
 }
 
 /**

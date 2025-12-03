@@ -62,13 +62,29 @@ svg {
   shape-rendering: geometricPrecision;
 }
 
+/* Prevent text selection during pan/zoom */
+.map-container {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+}
+
+/* GPU acceleration for smooth pan/zoom */
+svg[viewBox] {
+  will-change: viewBox;
+  transform: translateZ(0);
+}
+
 /* Station hover cursor */
-.station {
+.station,
+.station-marker {
   cursor: pointer;
   outline: none;
 }
 
-.station:focus-visible {
+.station:focus-visible,
+.station-marker:focus-visible {
   outline: 2px solid #22d3ee;
   outline-offset: 4px;
 }
@@ -76,6 +92,11 @@ svg {
 /* Metro line hover effects */
 .metro-line {
   transition: opacity 250ms ease;
+}
+
+/* Smooth viewBox transitions when not actively panning */
+svg:not(.panning) {
+  transition: viewBox 0.1s ease-out;
 }
 
 /* Minimap styles */

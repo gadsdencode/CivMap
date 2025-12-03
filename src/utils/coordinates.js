@@ -10,16 +10,34 @@ import { VIEWBOX, TIMELINE, LINE_Y_POSITIONS, CONVERGENCE } from '../constants/m
  * key: The year in history
  * position: The percentage (0.0 to 1.0) of the screen width this year should occupy
  * 
- * This creates a custom curve that expands modern history (high density)
- * and compresses ancient history (low density) to prevent clustering.
+ * DENSITY-AWARE DISTRIBUTION:
+ * Allocates screen space based on NUMBER OF STATIONS, not just time span.
+ * The 1900-2025 period has ~20 stations (highest density) and needs more space.
+ * Ancient periods have fewer stations and can be compressed.
+ * 
+ * Station counts by era:
+ * - Ancient (-10000 to -1000): ~12 stations → 20% of space
+ * - Classical (-1000 to 500): ~15 stations → 18% of space  
+ * - Medieval (500 to 1500): ~10 stations → 12% of space
+ * - Early Modern (1500-1800): ~8 stations → 12% of space
+ * - Industrial (1800-1900): ~10 stations → 12% of space
+ * - Contemporary (1900-2025): ~20 stations → 26% of space (MOST DENSE)
  */
 const TIME_ANCHORS = [
-  { year: -10000, position: 0.0 },  // Start: Left edge
-  { year: -2000,  position: 0.25 }, // Ancient history gets 25% of space
-  { year: 1000,   position: 0.50 }, // Middle ages at center screen
-  { year: 1800,   position: 0.70 }, // Industrial rev at 70%
-  { year: 1950,   position: 0.85 }, // Modern era gets significant breathing room
-  { year: 2025,   position: 1.0 }   // End: Right edge
+  { year: -10000, position: 0.0 },   // Start: Left edge
+  { year: -3000,  position: 0.10 },  // Very early - sparse stations
+  { year: -1000,  position: 0.20 },  // End of ancient
+  { year: 0,      position: 0.30 },  // Turn of the common era
+  { year: 500,    position: 0.38 },  // Fall of Rome
+  { year: 1200,   position: 0.45 },  // Medieval peak
+  { year: 1500,   position: 0.50 },  // Renaissance - MIDDLE OF SCREEN
+  { year: 1750,   position: 0.58 },  // Pre-industrial
+  { year: 1850,   position: 0.66 },  // Industrial revolution
+  { year: 1920,   position: 0.74 },  // Early 20th century
+  { year: 1960,   position: 0.82 },  // Space age / digital seeds
+  { year: 1990,   position: 0.90 },  // Digital revolution starts
+  { year: 2010,   position: 0.96 },  // Social/mobile era
+  { year: 2025,   position: 1.0 }    // End: Right edge - Singularity
 ];
 
 /**
