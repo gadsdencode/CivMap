@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } from 'react';
-import { Info, AlertTriangle, TrendingUp, Users, Castle, BookOpen, Skull, Zap, X, Globe, Cpu, Smartphone, Atom, Gauge, Printer, Settings, ZoomIn, ZoomOut, Maximize2, Move, Search, Filter, Play, Eye, EyeOff, Map, HelpCircle, ChevronRight } from 'lucide-react';
+import { Info, AlertTriangle, TrendingUp, Users, Castle, BookOpen, Skull, Zap, X, Globe, Cpu, Smartphone, Atom, Gauge, Printer, Settings, ZoomIn, ZoomOut, Maximize2, Move, Play, Eye, EyeOff, ChevronRight, Filter } from 'lucide-react';
 import { useToast } from './hooks/useToast';
 import { ToastContainer } from './components/Toast';
 import { useKeyboardNavigation, useFocusTrap } from './hooks/useKeyboardNavigation';
@@ -15,6 +15,7 @@ import { useMapController } from './src/hooks/useMapController';
 import { processStations, ICON_TYPES } from './src/data/stations';
 import { animateViewBox } from './src/utils/transitions';
 import MapRenderer from './src/components/MapRenderer';
+import MapOverlay, { LegendFooter } from './src/components/MapOverlay';
 
 /**
  * Icon mapping function - converts icon type strings to JSX elements
@@ -592,208 +593,23 @@ const CivilizationMetroMap = () => {
         </header>
       )}
 
-      {/* Human-Centric Control Panel - Compact Layout */}
-      {showUI && (
-      <div className="absolute top-14 left-4 z-30 flex flex-col gap-2">
-        {/* Top Row: Search + Quick Actions */}
-        <div className="flex items-center gap-2">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-cyan-400/60" />
-            <input
-              type="text"
-              id="station-finder"
-              role="combobox"
-              aria-expanded={searchQuery && filteredStations.length > 0}
-              aria-autocomplete="list"
-              aria-controls="station-finder-results"
-              aria-label="Search stations"
-              value={searchQuery}
-              onChange={(e) => actions.setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && filteredStations.length > 0) {
-                  e.preventDefault();
-                  actions.centerOnStation(filteredStations[0]);
-                  actions.selectStation(filteredStations[0]);
-                  announce(`Navigated to ${filteredStations[0].name}`);
-                }
-                if (e.key === 'ArrowDown' && filteredStations.length > 0) {
-                  e.preventDefault();
-                  const firstResult = filteredStations[0];
-                  actions.centerOnStation(firstResult);
-                  announce(`Found ${filteredStations.length} stations.`);
-                }
-              }}
-              placeholder="Search..."
-              className="pl-8 pr-7 py-1.5 bg-neutral-900/90 backdrop-blur-md border border-cyan-900/50 rounded-lg text-white text-sm placeholder-cyan-400/40 focus:outline-none focus:border-cyan-500 w-44"
-              autoComplete="off"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => { actions.setSearchQuery(''); announce('Search cleared'); }}
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-cyan-400/60 hover:text-white"
-                aria-label="Clear search"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
-          
-          {/* Compact Icon Buttons */}
-          <button
-            onClick={() => actions.toggleFilters()}
-            className={`p-1.5 backdrop-blur-md border rounded-lg transition-colors ${showFilters ? 'bg-cyan-900/50 border-cyan-500/50 text-cyan-300' : 'bg-neutral-900/90 border-cyan-900/50 text-cyan-400 hover:bg-neutral-800'}`}
-            title="Filters"
-            aria-label="Toggle filters"
-          >
-            <Filter size={18} />
-          </button>
-          <button
-            onClick={() => actions.toggleMinimap()}
-            className={`p-1.5 backdrop-blur-md border rounded-lg transition-colors ${showMinimap ? 'bg-cyan-900/50 border-cyan-500/50 text-cyan-300' : 'bg-neutral-900/90 border-cyan-900/50 text-cyan-400 hover:bg-neutral-800'}`}
-            title={showMinimap ? "Hide Minimap" : "Show Minimap"}
-            aria-label="Toggle minimap"
-          >
-            <Map size={18} />
-          </button>
-          <button
-            onClick={() => actions.setWelcome(true)}
-            className="p-1.5 bg-neutral-900/90 backdrop-blur-md border border-cyan-900/50 rounded-lg text-cyan-400 hover:bg-neutral-800 transition-colors"
-            title="Help"
-            aria-label="Show help"
-          >
-            <HelpCircle size={18} />
-          </button>
-        </div>
-        
-        {/* Search Results Dropdown */}
-        {searchQuery && filteredStations.length > 0 && (
-          <div
-            id="station-finder-results"
-            role="listbox"
-            aria-label={`${filteredStations.length} stations found`}
-            className="w-64 max-h-80 overflow-y-auto bg-neutral-900/95 backdrop-blur-md border border-cyan-900/50 rounded-lg shadow-2xl"
-          >
-            {filteredStations.slice(0, 8).map((station, idx) => (
-              <button
-                key={station.id}
-                role="option"
-                aria-selected={idx === 0}
-                onClick={() => {
-                  actions.centerOnStation(station);
-                  actions.selectStation(station);
-                  announce(`Navigated to ${station.name}`);
-                }}
-                className="w-full text-left p-2.5 hover:bg-neutral-800 border-b border-neutral-700/30 transition-colors focus:outline-none focus:bg-cyan-900/30"
-              >
-                <div className="font-medium text-white text-sm">{station.name}</div>
-                <div className="text-xs text-cyan-400/70">{station.yearLabel}</div>
-              </button>
-            ))}
-            {filteredStations.length > 8 && (
-              <div className="p-2 text-xs text-neutral-500 text-center">
-                +{filteredStations.length - 8} more
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Filter Panel - Compact */}
-        {showFilters && (
-          <div className="bg-neutral-900/95 backdrop-blur-md border border-cyan-900/50 rounded-lg p-3 shadow-xl w-56">
-            <div className="text-[10px] uppercase tracking-widest text-cyan-500 mb-2">Lines</div>
-            <div className="grid grid-cols-1 gap-1.5">
-              {[
-                { key: 'tech', label: 'Tech', color: 'bg-cyan-500' },
-                { key: 'population', label: 'Population', color: 'bg-green-500' },
-                { key: 'war', label: 'War', color: 'bg-red-500' },
-                { key: 'empire', label: 'Empire', color: 'bg-purple-500' },
-                { key: 'philosophy', label: 'Philosophy', color: 'bg-amber-500' }
-              ].map(line => (
-                <label key={line.key} className="flex items-center gap-2 cursor-pointer py-0.5">
-                  <input
-                    type="checkbox"
-                    checked={visibleLines[line.key]}
-                    onChange={() => actions.toggleLine(line.key)}
-                    className="w-3 h-3 rounded border-cyan-900/50 bg-neutral-800 text-cyan-500"
-                  />
-                  <div className={`w-3 h-3 rounded-full ${line.color} ${visibleLines[line.key] ? 'opacity-100' : 'opacity-30'}`}></div>
-                  <span className="text-xs text-neutral-300">{line.label}</span>
-                </label>
-              ))}
-            </div>
-            
-            <div className="mt-2 pt-2 border-t border-cyan-900/30">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showAllLabels}
-                  onChange={() => actions.toggleLabels()}
-                  className="w-3 h-3 rounded border-cyan-900/50 bg-neutral-800 text-cyan-500"
-                />
-                <span className="text-xs text-neutral-300">Show all labels</span>
-              </label>
-            </div>
-
-            {/* Era Quick Filters - More Compact */}
-            <div className="mt-2 pt-2 border-t border-cyan-900/30">
-              <div className="text-[10px] uppercase tracking-widest text-cyan-500 mb-1">Era</div>
-              <div className="flex flex-wrap gap-1">
-                {[
-                  { label: 'All', range: null },
-                  { label: 'Ancient', range: [-10000, -1000] },
-                  { label: 'Classical', range: [-1000, 500] },
-                  { label: 'Medieval', range: [500, 1500] },
-                  { label: 'Modern', range: [1500, 1900] },
-                  { label: 'Now', range: [1900, 2025] }
-                ].map(era => (
-                  <button
-                    key={era.label}
-                    onClick={() => actions.setEraFilter(era.range)}
-                    className={`px-1.5 py-0.5 text-[10px] rounded ${
-                      JSON.stringify(focusedEra) === JSON.stringify(era.range)
-                        ? 'bg-cyan-600 text-white'
-                        : 'bg-neutral-800 text-neutral-400 hover:text-white'
-                    }`}
-                  >
-                    {era.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Journey Mode Controls - Compact */}
-        {journeyMode && (
-          <div className="bg-gradient-to-r from-cyan-900/90 to-purple-900/90 backdrop-blur-md border border-cyan-500/50 rounded-lg p-3 shadow-xl">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <Play size={14} className="text-cyan-300" />
-                <span className="text-xs font-bold text-white">Journey {journeyIndex + 1}/{journeyStations.length}</span>
-              </div>
-              <button onClick={() => actions.endJourney()} className="text-cyan-400/60 hover:text-white">
-                <X size={14} />
-              </button>
-            </div>
-            <div className="flex gap-1.5">
-              <button
-                onClick={() => navigateJourney('prev')}
-                className="flex-1 px-2 py-1 bg-neutral-800 hover:bg-neutral-700 rounded text-xs text-white"
-              >
-                ← Prev
-              </button>
-              <button
-                onClick={() => navigateJourney('next')}
-                className="flex-1 px-2 py-1 bg-cyan-600 hover:bg-cyan-500 rounded text-xs text-white"
-              >
-                Next →
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-      )}
+      {/* Human-Centric Control Panel - Extracted to MapOverlay */}
+      <MapOverlay
+        showUI={showUI}
+        showFilters={showFilters}
+        showMinimap={showMinimap}
+        searchQuery={searchQuery}
+        filteredStations={filteredStations}
+        visibleLines={visibleLines}
+        showAllLabels={showAllLabels}
+        focusedEra={focusedEra}
+        journeyMode={journeyMode}
+        journeyIndex={journeyIndex}
+        journeyStations={journeyStations}
+        actions={actions}
+        navigateJourney={navigateJourney}
+        announce={announce}
+      />
 
       {/* --- Main Viewport --- */}
       <div className="flex-1 relative flex">
@@ -1233,16 +1049,8 @@ const CivilizationMetroMap = () => {
         </div>
       </div>
 
-      {/* --- Legend Footer - Compact --- */}
-      {showUI && (
-        <footer className="h-10 bg-neutral-950/90 backdrop-blur-sm border-t border-neutral-800/50 flex items-center justify-center gap-6 px-4 z-20 shrink-0">
-          <LegendItem color="bg-cyan-400" label="Tech" />
-          <LegendItem color="bg-green-500" label="Population" />
-          <LegendItem color="bg-red-500" label="War" />
-          <LegendItem color="bg-purple-500" label="Empire" />
-          <LegendItem color="bg-amber-500" label="Philosophy" />
-        </footer>
-      )}
+      {/* Legend Footer - Extracted to MapOverlay */}
+      {showUI && <LegendFooter />}
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
@@ -1262,13 +1070,5 @@ const CivilizationMetroMap = () => {
     </div>
   );
 };
-
-// Helper for Footer - Compact Legend
-const LegendItem = ({ color, label }) => (
-  <div className="flex items-center gap-1.5 shrink-0">
-    <div className={`w-2.5 h-2.5 rounded-full ${color}`}></div>
-    <span className="text-[10px] uppercase tracking-wider text-neutral-400">{label}</span>
-  </div>
-);
 
 export default CivilizationMetroMap;
