@@ -234,7 +234,7 @@ const CivilizationMetroMap = () => {
       // Simulate loading time for smooth experience
       const loadTimer = setTimeout(() => {
         actions.setLoading(false);
-        announce('Civilization Metro Map loaded successfully');
+        announce('Civilization Map loaded successfully');
       }, 800);
 
       return () => clearTimeout(loadTimer);
@@ -466,10 +466,10 @@ const CivilizationMetroMap = () => {
     <div 
       className="flex flex-col h-screen w-full bg-neutral-950 text-cyan-50 font-sans overflow-hidden selection:bg-cyan-500/30"
       role="application"
-      aria-label="Civilization Metro Map - Interactive timeline visualization"
+      aria-label="Civilization Map - Interactive timeline visualization"
     >
       {/* Loading State */}
-      {isLoading && <LoadingOverlay message="Loading Civilization Metro Map..." />}
+      {isLoading && <LoadingOverlay message="Loading Civilization Map..." />}
       
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
@@ -480,7 +480,7 @@ const CivilizationMetroMap = () => {
           <div className="max-w-2xl mx-4 bg-neutral-900/95 border border-cyan-900/50 rounded-2xl p-8 shadow-2xl">
             <div className="text-center mb-8">
               <h2 className="text-4xl font-black mb-4 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">
-                Welcome to the Civilization Metro Map
+                Welcome to the Civilization Map
               </h2>
               <p className="text-cyan-300/80 text-lg">
                 Explore 12,025 years of human history through an interactive transit map
@@ -586,7 +586,7 @@ const CivilizationMetroMap = () => {
       {showUI && (
         <header className="absolute top-2 left-12 z-20 pointer-events-none">
           <h1 className="text-xl font-black tracking-tight uppercase text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">
-            Civilization Metro Map
+            Civilization Map
           </h1>
           <p className="text-[10px] text-cyan-400/50 uppercase tracking-widest">12,025 Years of History</p>
         </header>
